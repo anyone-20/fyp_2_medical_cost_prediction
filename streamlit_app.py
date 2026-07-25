@@ -2,11 +2,30 @@ import joblib
 import pandas as pd
 import streamlit as st
 
-# Load trained model
-model = joblib.load("gradient_boosting.pkl")
+
+# Load custom class definition in streamlit if using class object
+class BlendedCostModel:
+
+    def __init__(self, preprocessor, lgb_model, xgb_model, weight):
+        self.preprocessor = preprocessor
+        self.lgb_model = lgb_model
+        self.xgb_model = xgb_model
+        self.weight = weight
+
+    def predict(self, X):
+        if self.preprocessor is not None:
+            X_trans = self.preprocessor.transform(X)
+        else:
+            X_trans = X
+        lgb_preds = self.lgb_model.predict(X_trans)
+        xgb_preds = self.xgb_model.predict(X_trans)
+        return (self.weight * lgb_preds) + ((1 - self.weight) * xgb_preds)
+
+
+# Load pipeline
+pipeline = joblib.load("gradient_boosting_pipeline.pkl")
 
 st.title("🏥 Inpatient Cost Prediction AI")
-st.write("Machine Learning model to predict inpatient healthcare cost")
 
 age = st.number_input("Age", min_value=0, max_value=100)
 bmi = st.number_input("BMI", min_value=0.0)
@@ -14,7 +33,6 @@ gender = st.selectbox("Gender", ["Male", "Female"])
 insurance = st.selectbox("Insurance", ["Yes", "No"])
 
 if st.button("Predict Cost"):
-    # 1. Collect inputs into a raw DataFrame
     input_data = pd.DataFrame(
         {
             "age": [age],
@@ -24,15 +42,6 @@ if st.button("Predict Cost"):
         }
     )
 
-    # 2. Extract the exact feature names your model was trained on
-    expected_features = model.feature_names_in_
-
-    # 3. Align columns to match training features (fills missing columns with 0)
-    input_data_aligned = input_data.reindex(
-        columns=expected_features, fill_value=0
-    )
-
-    # 4. Predict using the aligned DataFrame
-    prediction = model.predict(input_data_aligned)
-
+    # Pipeline handles transformations and ensemble prediction automatically
+    prediction = pipeline.predict(input_data)
     st.success(f"Predicted inpatient cost: RM {prediction[0]:,.2f}")
