@@ -1,47 +1,37 @@
+import streamlit as st
 import joblib
 import pandas as pd
-import streamlit as st
 
+# Load the dictionary artifacts
+artifacts = joblib.load("gradient_boosting_pipeline.pkl")
 
-# Load custom class definition in streamlit if using class object
-class BlendedCostModel:
+preprocessor = artifacts['preprocessor']
+lgb_model = artifacts['lgb_model']
+xgb_model = artifacts['xgb_model']
+weight = artifacts['weight']
+feature_names = artifacts['feature_names']
 
-    def __init__(self, preprocessor, lgb_model, xgb_model, weight):
-        self.preprocessor = preprocessor
-        self.lgb_model = lgb_model
-        self.xgb_model = xgb_model
-        self.weight = weight
+# 1. Create raw input dataframe from Streamlit form inputs
+raw_input = pd.DataFrame([{
+    'age': age_input,
+    'bmi': bmi_input,
+    # ... add all original user input features
+}])
 
-    def predict(self, X):
-        if self.preprocessor is not None:
-            X_trans = self.preprocessor.transform(X)
-        else:
-            X_trans = X
-        lgb_preds = self.lgb_model.predict(X_trans)
-        xgb_preds = self.xgb_model.predict(X_trans)
-        return (self.weight * lgb_preds) + ((1 - self.weight) * xgb_preds)
+# 2. Transform using preprocessor
+X_trans = preprocessor.transform(raw_input)
 
+# If preprocessor outputs a DataFrame or Array, align features:
+if feature_names:
+    if hasattr(X_trans, 'loc'):
+        X_trans = X_trans[feature_names]
+    else:
+        # If output is numpy array
+        X_trans = pd.DataFrame(X_trans, columns=preprocessor.get_feature_names_out())[feature_names]
 
-# Load pipeline
-pipeline = joblib.load("gradient_boosting_pipeline.pkl")
+# 3. Make prediction
+pred_lgb = lgb_model.predict(X_trans)
+pred_xgb = xgb_model.predict(X_trans)
+final_pred = (weight * pred_lgb) + ((1 - weight) * pred_xgb)
 
-st.title("🏥 Inpatient Cost Prediction AI")
-
-age = st.number_input("Age", min_value=0, max_value=100)
-bmi = st.number_input("BMI", min_value=0.0)
-gender = st.selectbox("Gender", ["Male", "Female"])
-insurance = st.selectbox("Insurance", ["Yes", "No"])
-
-if st.button("Predict Cost"):
-    input_data = pd.DataFrame(
-        {
-            "age": [age],
-            "bmi": [bmi],
-            "gender": [gender],
-            "has_insurance": [insurance],
-        }
-    )
-
-    # Pipeline handles transformations and ensemble prediction automatically
-    prediction = pipeline.predict(input_data)
-    st.success(f"Predicted inpatient cost: RM {prediction[0]:,.2f}")
+st.success(f"Predicted Cost: ${final_pred[0]:,.2f}")
