@@ -22,7 +22,7 @@ st.set_page_config(
 # 2. MODEL FILE PATH
 # =========================================================
 
-MODEL_PATH = "C:\Users\leeji\FYP2\CFPS\ML\2020\Gradient Boosting\medical_cost_model.pkl"
+MODEL_PATH = Path(__file__).parent / "medical_cost_model.pkl"
 
 
 # =========================================================
