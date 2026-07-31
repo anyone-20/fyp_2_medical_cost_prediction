@@ -98,3 +98,14 @@ with st.form("medical_cost_form"):
         "Predict medical cost",
         use_container_width=True,
     )
+    if submitted:
+
+    health_mapping = {
+        "Excellent": 1,
+        "Very good": 2,
+        "Good": 3,
+        "Fair": 4,
+        "Poor": 5,
+    }
+
+    health_code = health_mapping[health_label]
