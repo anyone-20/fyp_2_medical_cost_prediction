@@ -8,3 +8,4 @@ matplotlib
 google-genai
 lightgbm
 xgboost
+shap
