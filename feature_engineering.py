@@ -1,186 +1,121 @@
-{
- "cells": [
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "id": "da51ebd2-ef7c-4f89-a36b-ee258fa0cd8f",
-   "metadata": {},
-   "outputs": [],
-   "source": [
-    "import numpy as np\n",
-    "import pandas as pd\n",
-    "\n",
-    "\n",
-    "def create_model_features(\n",
-    "    *,\n",
-    "    age,\n",
-    "    height_cm,\n",
-    "    weight_kg,\n",
-    "    hospitalized_code,\n",
-    "    outpatient_cost,\n",
-    "    previous_inpatient_cost,\n",
-    "    employed_code,\n",
-    "    health_code,\n",
-    "    chronic_illness_code,\n",
-    "    insurance_code,\n",
-    "    required_features,\n",
-    "):\n",
-    "    \"\"\"\n",
-    "    Convert Streamlit user inputs into the exact processed\n",
-    "    columns required by the saved machine-learning model.\n",
-    "    \"\"\"\n",
-    "\n",
-    "    if not 0 < age <= 120:\n",
-    "        raise ValueError(\n",
-    "            \"Age must be between 1 and 120.\"\n",
-    "        )\n",
-    "\n",
-    "    if not 50 <= height_cm <= 250:\n",
-    "        raise ValueError(\n",
-    "            \"Height must be between 50 and 250 cm.\"\n",
-    "        )\n",
-    "\n",
-    "    if not 10 <= weight_kg <= 300:\n",
-    "        raise ValueError(\n",
-    "            \"Weight must be between 10 and 300 kg.\"\n",
-    "        )\n",
-    "\n",
-    "    if outpatient_cost < 0:\n",
-    "        raise ValueError(\n",
-    "            \"Outpatient cost cannot be negative.\"\n",
-    "        )\n",
-    "\n",
-    "    if previous_inpatient_cost < 0:\n",
-    "        raise ValueError(\n",
-    "            \"Previous inpatient cost cannot be negative.\"\n",
-    "        )\n",
-    "\n",
-    "    # Calculate BMI\n",
-    "    height_m = height_cm / 100\n",
-    "\n",
-    "    bmi = weight_kg / (\n",
-    "        height_m ** 2\n",
-    "    )\n",
-    "\n",
-    "    # Apply the same log1p transformation used during training\n",
-    "    log_qc7b = np.log1p(\n",
-    "        outpatient_cost\n",
-    "    )\n",
-    "\n",
-    "    log_past_qc701 = np.log1p(\n",
-    "        previous_inpatient_cost\n",
-    "    )\n",
-    "\n",
-    "    # Create all features that may be required\n",
-    "    all_features = pd.DataFrame(\n",
-    "        {\n",
-    "            \"log_qc7b\": [\n",
-    "                log_qc7b\n",
-    "            ],\n",
-    "\n",
-    "            \"qc401 age\": [\n",
-    "                hospitalized_code * age\n",
-    "            ],\n",
-    "\n",
-    "            \"qc401 bmi\": [\n",
-    "                hospitalized_code * bmi\n",
-    "            ],\n",
-    "\n",
-    "            \"qc401\": [\n",
-    "                hospitalized_code\n",
-    "            ],\n",
-    "\n",
-    "            \"log_qc7b bmi\": [\n",
-    "                log_qc7b * bmi\n",
-    "            ],\n",
-    "\n",
-    "            \"log_qc7b age\": [\n",
-    "                log_qc7b * age\n",
-    "            ],\n",
-    "\n",
-    "            \"qgb1\": [\n",
-    "                employed_code\n",
-    "            ],\n",
-    "\n",
-    "            \"log_past_qc701\": [\n",
-    "                log_past_qc701\n",
-    "            ],\n",
-    "\n",
-    "            \"qp201\": [\n",
-    "                health_code\n",
-    "            ],\n",
-    "\n",
-    "            \"qp401\": [\n",
-    "                chronic_illness_code\n",
-    "            ],\n",
-    "\n",
-    "            \"qp605_s_1\": [\n",
-    "                insurance_code\n",
-    "            ],\n",
-    "\n",
-    "            # Extra features included in case your PKL requires them\n",
-    "            \"age\": [\n",
-    "                age\n",
-    "            ],\n",
-    "\n",
-    "            \"bmi\": [\n",
-    "                bmi\n",
-    "            ],\n",
-    "\n",
-    "            \"log_qc7b qc401\": [\n",
-    "                log_qc7b\n",
-    "                * hospitalized_code\n",
-    "            ],\n",
-    "\n",
-    "            \"bmi age\": [\n",
-    "                bmi * age\n",
-    "            ],\n",
-    "\n",
-    "            # Original qp102 was recorded in jin.\n",
-    "            # 1 jin = 0.5 kg.\n",
-    "            \"qp102\": [\n",
-    "                weight_kg / 0.5\n",
-    "            ],\n",
-    "        }\n",
-    "    )\n",
-    "\n",
-    "    missing_features = [\n",
-    "        feature\n",
-    "        for feature in required_features\n",
-    "        if feature not in all_features.columns\n",
-    "    ]\n",
-    "\n",
-    "    if missing_features:\n",
-    "        raise ValueError(\n",
-    "            \"The application cannot create these required \"\n",
-    "            f\"features: {missing_features}\"\n",
-    "        )\n",
-    "\n",
-    "    return all_features[\n",
-    "        required_features\n",
-    "    ]"
-   ]
-  }
- ],
- "metadata": {
-  "kernelspec": {
-   "display_name": "Python [conda env:base] *",
-   "language": "python",
-   "name": "conda-base-py"
-  },
-  "language_info": {
-   "codemirror_mode": {
-    "name": "ipython",
-    "version": 3
-   },
-   "file_extension": ".py",
-   "mimetype": "text/x-python",
-   "name": "python",
-   "nbconvert_exporter": "python",
-   "pygments_lexer": "ipython3",
-   "version": "3.13.9"
-  }
- },
- "nbformat": 4,
- "nbformat_minor": 5
-}
+import numpy as np
+import pandas as pd
+
+
+def create_model_features(
+    *,
+    age,
+    height_cm,
+    weight_kg,
+    hospitalized_code,
+    outpatient_cost,
+    previous_inpatient_cost,
+    employed_code,
+    health_code,
+    chronic_illness_code,
+    insurance_code,
+    required_features,
+):
+    """
+    Convert Streamlit user inputs into the exact processed
+    columns required by the saved machine-learning model.
+    """
+
+    if not 0 < age <= 120:
+        raise ValueError("Age must be between 1 and 120.")
+
+    if not 50 <= height_cm <= 250:
+        raise ValueError(
+            "Height must be between 50 and 250 cm."
+        )
+
+    if not 10 <= weight_kg <= 300:
+        raise ValueError(
+            "Weight must be between 10 and 300 kg."
+        )
+
+    if outpatient_cost < 0:
+        raise ValueError(
+            "Outpatient cost cannot be negative."
+        )
+
+    if previous_inpatient_cost < 0:
+        raise ValueError(
+            "Previous inpatient cost cannot be negative."
+        )
+
+    # Calculate BMI
+    height_m = height_cm / 100
+    bmi = weight_kg / (height_m ** 2)
+
+    # Apply the same log1p transformations used during training
+    log_qc7b = np.log1p(outpatient_cost)
+    log_past_qc701 = np.log1p(
+        previous_inpatient_cost
+    )
+
+    # Create all possible model features
+    all_features = pd.DataFrame(
+        {
+            "log_qc7b": [log_qc7b],
+            "qc401 age": [
+                hospitalized_code * age
+            ],
+            "qc401 bmi": [
+                hospitalized_code * bmi
+            ],
+            "qc401": [
+                hospitalized_code
+            ],
+            "log_qc7b bmi": [
+                log_qc7b * bmi
+            ],
+            "log_qc7b age": [
+                log_qc7b * age
+            ],
+            "qgb1": [
+                employed_code
+            ],
+            "log_past_qc701": [
+                log_past_qc701
+            ],
+            "qp201": [
+                health_code
+            ],
+            "qp401": [
+                chronic_illness_code
+            ],
+            "qp605_s_1": [
+                insurance_code
+            ],
+            "age": [
+                age
+            ],
+            "bmi": [
+                bmi
+            ],
+            "log_qc7b qc401": [
+                log_qc7b * hospitalized_code
+            ],
+            "bmi age": [
+                bmi * age
+            ],
+            "qp102": [
+                weight_kg / 0.5
+            ],
+        }
+    )
+
+    missing_features = [
+        feature
+        for feature in required_features
+        if feature not in all_features.columns
+    ]
+
+    if missing_features:
+        raise ValueError(
+            "The application cannot create these required "
+            f"features: {missing_features}"
+        )
+
+    return all_features[required_features]
