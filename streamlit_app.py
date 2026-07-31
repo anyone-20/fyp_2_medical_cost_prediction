@@ -109,3 +109,26 @@ with st.form("medical_cost_form"):
     }
 
     health_code = health_mapping[health_label]
+
+
+chronic_mapping = {
+    "No": 0,
+    "Yes": 1,
+}
+
+chronic_code = chronic_mapping[chronic_illness_label]
+
+employed_mapping = {
+    "No": 0,
+    "Yes": 1,
+}
+
+employed_code = employed_mapping[employed_label]
+
+hospitalized_mapping = {
+    "No": 0,
+    "Yes": 1,
+}
+
+hospitalized_code = hospitalized_mapping[hospitalized_label]
+
