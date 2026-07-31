@@ -2,6 +2,8 @@ from pathlib import Path
 
 import joblib
 import numpy as np
+import pandas as pd
+import shap
 import streamlit as st
 
 from feature_engineering import create_model_features
@@ -78,7 +80,55 @@ except Exception as error:
     )
     st.stop()
 
+def predict_cost(
+    artifact,
+    model_input,
+):
+    """
+    Generate a blended LightGBM and XGBoost prediction.
 
+    Returns:
+        predicted_log_cost
+        predicted_original_cost
+    """
+
+    required_features = artifact["feature_names"]
+
+    model_input = model_input[
+        required_features
+    ]
+
+    lgb_prediction = artifact[
+        "lgb_model"
+    ].predict(model_input)
+
+    xgb_prediction = artifact[
+        "xgb_model"
+    ].predict(model_input)
+
+    blend_weight = float(
+        artifact["blend_weight"]
+    )
+
+    predicted_log_cost = (
+        blend_weight * lgb_prediction
+        + (1 - blend_weight) * xgb_prediction
+    )[0]
+
+    predicted_original_cost = np.expm1(
+        predicted_log_cost
+    )
+
+    predicted_original_cost = max(
+        0.0,
+        float(predicted_original_cost),
+    )
+
+    return (
+        float(predicted_log_cost),
+        predicted_original_cost,
+    )
+    
 # =========================================================
 # 4. APPLICATION TITLE
 # =========================================================
@@ -348,6 +398,76 @@ if submitted:
             "medical-cost variable in your dataset."
         )
 
+        def create_five_year_projection(
+    *,
+    artifact,
+    current_age,
+    height_cm,
+    weight_kg,
+    hospitalized_code,
+    outpatient_cost,
+    current_prediction,
+    employed_code,
+    health_code,
+    chronic_illness_code,
+    insurance_code,
+):
+    """
+    Create a five-year scenario projection.
+
+    Assumptions:
+    - Age increases by one each year.
+    - Height and weight remain unchanged.
+    - Healthcare, employment, health, chronic illness,
+      and insurance inputs remain unchanged.
+    - Each predicted cost becomes the next year's
+      previous inpatient cost.
+    """
+
+    projection_records = []
+
+    previous_cost = current_prediction
+
+    for year_number in range(1, 6):
+
+        future_age = current_age + year_number
+
+        future_input = create_model_features(
+            age=future_age,
+            height_cm=height_cm,
+            weight_kg=weight_kg,
+            hospitalized_code=hospitalized_code,
+            outpatient_cost=outpatient_cost,
+            previous_inpatient_cost=previous_cost,
+            employed_code=employed_code,
+            health_code=health_code,
+            chronic_illness_code=chronic_illness_code,
+            insurance_code=insurance_code,
+            required_features=artifact[
+                "feature_names"
+            ],
+        )
+
+        _, future_cost = predict_cost(
+            artifact,
+            future_input,
+        )
+
+        projection_records.append(
+            {
+                "Year": f"Year {year_number}",
+                "Age": future_age,
+                "Projected cost": future_cost,
+            }
+        )
+
+        # Use this prediction as the next year's previous cost
+        previous_cost = future_cost
+
+    return pd.DataFrame(
+        projection_records
+    )
+    
         # -------------------------------------------------
         # Technical details for testing
         # -------------------------------------------------
