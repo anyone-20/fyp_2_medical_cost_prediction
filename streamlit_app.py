@@ -1,54 +1,100 @@
 import streamlit as st
-import pandas as pd
-import joblib
 
-# 1. Load your saved artifacts dictionary
-artifacts = joblib.load("gradient_boosting_pipeline.pkl")
 
-preprocessor = artifacts['preprocessor']
-lgb_model = artifacts['lgb_model']
-xgb_model = artifacts['xgb_model']
-weight = artifacts['weight']
-feature_names = artifacts['feature_names']
+with st.form("medical_cost_form"):
 
-st.title("Medical Cost Prediction App")
+    st.subheader("Personal information")
 
-# 2. Create Streamlit input widgets for your features
-# (Make sure to match the exact feature names your model was trained on)
-age = st.number_input("Age", min_value=0, max_value=120, value=30)
-bmi = st.number_input("BMI", min_value=10.0, max_value=60.0, value=25.0)
-length_of_stay = st.number_input("Length of Stay (days)", min_value=1, max_value=365, value=3)
+    age = st.number_input(
+        "Age",
+        min_value=1,
+        max_value=120,
+        value=40,
+        step=1,
+    )
 
-# Add any other categorical or numerical inputs your model requires
-# e.g., sex = st.selectbox("Sex", ["male", "female"])
-# e.g., smoker = st.selectbox("Smoker", ["yes", "no"])
+    height_cm = st.number_input(
+        "Height (cm)",
+        min_value=50.0,
+        max_value=250.0,
+        value=165.0,
+        step=0.1,
+    )
 
-# 3. Predict button
-if st.button("Calculate Predicted Cost"):
-    # Pack the user inputs into a DataFrame matching your raw columns
-    raw_input = pd.DataFrame([{
-        'age': age,
-        'bmi': bmi,
-        'length_of_stay': length_of_stay,
-        # 'sex': sex,
-        # 'smoker': smoker,
-        # (Include every original raw feature your preprocessor expects!)
-    }])
+    weight_kg = st.number_input(
+        "Weight (kg)",
+        min_value=10.0,
+        max_value=300.0,
+        value=60.0,
+        step=0.1,
+    )
 
-    # Transform through your preprocessor
-    X_trans = preprocessor.transform(raw_input)
+    st.subheader("Healthcare information")
 
-    # Align to pruned features if necessary
-    if feature_names:
-        if hasattr(X_trans, 'loc'):
-            X_trans = X_trans[feature_names]
-        else:
-            X_trans = pd.DataFrame(X_trans, columns=preprocessor.get_feature_names_out())[feature_names]
+    hospitalized_label = st.selectbox(
+        "Were you hospitalized during the survey period?",
+        options=[
+            "No",
+            "Yes",
+        ],
+    )
 
-    # Run predictions and blend
-    pred_lgb = lgb_model.predict(X_trans)
-    pred_xgb = xgb_model.predict(X_trans)
-    final_pred = (weight * pred_lgb) + ((1 - weight) * pred_xgb)
+    outpatient_cost = st.number_input(
+        "Outpatient medical cost",
+        min_value=0.0,
+        value=0.0,
+        step=100.0,
+    )
 
-    # Display result
-    st.success(f"Predicted Medical Cost: ${final_pred[0]:,.2f}")
+    previous_inpatient_cost = st.number_input(
+        "Previous inpatient medical cost",
+        min_value=0.0,
+        value=0.0,
+        step=100.0,
+    )
+
+    chronic_illness_label = st.selectbox(
+        "Have you been diagnosed with a chronic illness?",
+        options=[
+            "No",
+            "Yes",
+        ],
+    )
+
+    health_label = st.selectbox(
+        "How would you rate your health?",
+        options=[
+            "Excellent",
+            "Very good",
+            "Good",
+            "Fair",
+            "Poor",
+        ],
+    )
+
+    st.subheader("Employment and insurance")
+
+    employed_label = st.selectbox(
+        "Are you currently employed?",
+        options=[
+            "No",
+            "Yes",
+        ],
+    )
+
+    insurance_label = st.selectbox(
+        "Medical insurance category",
+        options=[
+            "Insurance category 1",
+            "Insurance category 2",
+            "Insurance category 3",
+            "Insurance category 4",
+            "Insurance category 5",
+            "No insurance",
+        ],
+    )
+
+    submitted = st.form_submit_button(
+        "Predict medical cost",
+        use_container_width=True,
+    )
