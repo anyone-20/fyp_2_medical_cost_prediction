@@ -33,11 +33,11 @@ MODEL_PATH = Path(__file__).parent / "medical_cost_model.pkl"
 
 FEATURE_LABELS = {
     "log_qc7b": "Outpatient medical cost",
-    "qc401 age": "Hospitalization and age interaction",
-    "qc401 bmi": "Hospitalization and BMI interaction",
+    "qc401 age": "Hospitalization and age",
+    "qc401 bmi": "Hospitalization and BMI",
     "qc401": "Hospitalization status",
-    "log_qc7b bmi": "Outpatient cost and BMI interaction",
-    "log_qc7b age": "Outpatient cost and age interaction",
+    "log_qc7b bmi": "Outpatient cost and BMI",
+    "log_qc7b age": "Outpatient cost and age",
     "qgb1": "Employment status",
     "log_past_qc701": "Previous inpatient medical cost",
     "qp201": "Self-rated health",
@@ -46,9 +46,9 @@ FEATURE_LABELS = {
     "age": "Age",
     "bmi": "BMI",
     "log_qc7b qc401": (
-        "Outpatient cost and hospitalization interaction"
+        "Outpatient cost and hospitalization"
     ),
-    "bmi age": "BMI and age interaction",
+    "bmi age": "BMI and age",
     "qp102": "Body weight",
 }
 
@@ -60,7 +60,7 @@ FEATURE_LABELS = {
 @st.cache_resource
 def load_model():
     """
-    Load and validate the saved model artifact.
+    Load and validate the saved machine-learning artifact.
     """
 
     if not MODEL_PATH.exists():
@@ -85,7 +85,7 @@ def load_model():
 
     if missing_keys:
         raise KeyError(
-            "The PKL file is missing these required items: "
+            "The model file is missing these required items: "
             f"{missing_keys}"
         )
 
@@ -93,7 +93,7 @@ def load_model():
 
 
 # =========================================================
-# 5. PREDICTION FUNCTION
+# 5. COST PREDICTION FUNCTION
 # =========================================================
 
 def predict_cost(
@@ -106,8 +106,8 @@ def predict_cost(
     Returns:
         predicted_log_cost
         predicted_original_cost
-        lgb_log_prediction
-        xgb_log_prediction
+        LightGBM log prediction
+        XGBoost log prediction
     """
 
     required_features = list(
@@ -153,10 +153,10 @@ def predict_cost(
 
 
 # =========================================================
-# 6. FIVE-YEAR PROJECTION FUNCTION
+# 6. NEXT-YEAR COST PROJECTION
 # =========================================================
 
-def create_five_year_projection(
+def predict_next_year_cost(
     *,
     artifact,
     current_age,
@@ -171,63 +171,49 @@ def create_five_year_projection(
     insurance_code,
 ):
     """
-    Create a five-year scenario projection.
+    Estimate next year's inpatient medical cost.
 
     Assumptions:
-    - Age increases by one each year.
+    - Age increases by one year.
     - Height and weight remain unchanged.
-    - All other personal and health conditions remain unchanged.
-    - Each predicted cost becomes the following year's
-      previous inpatient medical cost.
+    - Other entered conditions remain unchanged.
+    - The current predicted cost becomes next year's
+      previous inpatient cost.
     """
 
-    projection_records = []
+    next_year_age = current_age + 1
 
-    previous_cost = current_prediction
-
-    for year_number in range(1, 6):
-
-        future_age = current_age + year_number
-
-        future_input = create_model_features(
-            age=future_age,
-            height_cm=height_cm,
-            weight_kg=weight_kg,
-            hospitalized_code=hospitalized_code,
-            outpatient_cost=outpatient_cost,
-            previous_inpatient_cost=previous_cost,
-            employed_code=employed_code,
-            health_code=health_code,
-            chronic_illness_code=chronic_illness_code,
-            insurance_code=insurance_code,
-            required_features=artifact[
-                "feature_names"
-            ],
-        )
-
-        (
-            _,
-            future_cost,
-            _,
-            _,
-        ) = predict_cost(
-            artifact,
-            future_input,
-        )
-
-        projection_records.append(
-            {
-                "Year": f"Year {year_number}",
-                "Age": future_age,
-                "Projected cost": future_cost,
-            }
-        )
-
-        previous_cost = future_cost
-
-    return pd.DataFrame(
-        projection_records
+    next_year_input = create_model_features(
+        age=next_year_age,
+        height_cm=height_cm,
+        weight_kg=weight_kg,
+        hospitalized_code=hospitalized_code,
+        outpatient_cost=outpatient_cost,
+        previous_inpatient_cost=current_prediction,
+        employed_code=employed_code,
+        health_code=health_code,
+        chronic_illness_code=chronic_illness_code,
+        insurance_code=insurance_code,
+        required_features=artifact[
+            "feature_names"
+        ],
     )
+
+    (
+        next_year_log_cost,
+        next_year_cost,
+        _,
+        _,
+    ) = predict_cost(
+        artifact,
+        next_year_input,
+    )
+
+    return {
+        "Age": next_year_age,
+        "Log cost": next_year_log_cost,
+        "Predicted cost": next_year_cost,
+    }
 
 
 # =========================================================
@@ -239,7 +225,7 @@ def extract_shap_values(
     model_input,
 ):
     """
-    Convert SHAP output into a one-dimensional NumPy array.
+    Convert SHAP output into a one-dimensional array.
     """
 
     shap_result = explainer(
@@ -270,19 +256,22 @@ def extract_shap_values(
 
 @st.cache_resource
 def create_shap_explainers(
-    lgb_model,
-    xgb_model,
+    _lgb_model,
+    _xgb_model,
 ):
     """
-    Create and cache SHAP explainers for both tree models.
+    Create and cache SHAP explainers.
+
+    The leading underscores tell Streamlit not to hash
+    the model objects.
     """
 
     lgb_explainer = shap.TreeExplainer(
-        lgb_model
+        _lgb_model
     )
 
     xgb_explainer = shap.TreeExplainer(
-        xgb_model
+        _xgb_model
     )
 
     return (
@@ -298,7 +287,8 @@ def calculate_top_contributors(
     top_n=3,
 ):
     """
-    Calculate weighted SHAP contributions for the blended model.
+    Calculate weighted SHAP contributions for the
+    blended LightGBM and XGBoost prediction.
     """
 
     required_features = list(
@@ -333,14 +323,14 @@ def calculate_top_contributors(
 
     if len(lgb_values) != len(required_features):
         raise ValueError(
-            "LightGBM SHAP values do not match the "
-            "number of model features."
+            "The number of LightGBM SHAP values does not "
+            "match the number of model features."
         )
 
     if len(xgb_values) != len(required_features):
         raise ValueError(
-            "XGBoost SHAP values do not match the "
-            "number of model features."
+            "The number of XGBoost SHAP values does not "
+            "match the number of model features."
         )
 
     blended_values = (
@@ -392,7 +382,7 @@ def calculate_top_contributors(
 
 
 # =========================================================
-# 8. LOAD THE MODEL
+# 8. LOAD THE TRAINED MODEL
 # =========================================================
 
 try:
@@ -406,7 +396,7 @@ except Exception as error:
 
 
 # =========================================================
-# 9. APPLICATION TITLE
+# 9. APPLICATION HEADER
 # =========================================================
 
 st.title("🏥 Medical Cost Prediction")
@@ -417,14 +407,14 @@ st.write(
 )
 
 st.info(
-    "The model estimates inpatient medical cost based on "
-    "the information entered. The result is a machine-learning "
-    "estimate and should not be treated as medical advice."
+    "This application estimates inpatient medical cost "
+    "using a trained machine-learning model. The result "
+    "should not be treated as medical or financial advice."
 )
 
 
 # =========================================================
-# 10. STREAMLIT INPUT FORM
+# 10. USER INPUT FORM
 # =========================================================
 
 with st.form("medical_cost_form"):
@@ -434,12 +424,12 @@ with st.form("medical_cost_form"):
     age = st.number_input(
         "Age",
         min_value=1,
-        max_value=115,
+        max_value=119,
         value=40,
         step=1,
         help=(
-            "The maximum age is limited to 115 so the "
-            "five-year projection remains within age 120."
+            "The maximum age is 119 because the next-year "
+            "projection increases age by one year."
         ),
     )
 
@@ -477,8 +467,8 @@ with st.form("medical_cost_form"):
         value=0.0,
         step=100.0,
         help=(
-            "Enter the outpatient medical cost during "
-            "the survey period."
+            "Enter the individual's outpatient medical "
+            "cost during the survey period."
         ),
     )
 
@@ -534,8 +524,8 @@ with st.form("medical_cost_form"):
             "No insurance",
         ],
         help=(
-            "Replace the generic insurance category names "
-            "with the official questionnaire descriptions later."
+            "Replace these generic labels with the official "
+            "insurance descriptions from your questionnaire."
         ),
     )
 
@@ -546,14 +536,14 @@ with st.form("medical_cost_form"):
 
 
 # =========================================================
-# 11. PROCESS INPUT AND DISPLAY RESULTS
+# 11. PROCESS USER INPUT
 # =========================================================
 
 if submitted:
 
     try:
         # -------------------------------------------------
-        # Convert labels into numeric values
+        # Convert labels into numeric model codes
         # -------------------------------------------------
 
         yes_no_mapping = {
@@ -600,7 +590,7 @@ if submitted:
         ]
 
         # -------------------------------------------------
-        # Generate exact features required by the model
+        # Generate features expected by the trained model
         # -------------------------------------------------
 
         model_input = create_model_features(
@@ -620,7 +610,7 @@ if submitted:
         )
 
         # -------------------------------------------------
-        # Current cost prediction
+        # Current medical-cost prediction
         # -------------------------------------------------
 
         (
@@ -638,26 +628,26 @@ if submitted:
         )
 
         st.metric(
-            label="Estimated inpatient medical cost",
+            label="Estimated current inpatient medical cost",
             value=f"{predicted_medical_cost:,.2f}",
         )
 
         st.caption(
-            "The amount uses the same currency unit as "
-            "the original target variable in the dataset."
+            "The amount uses the same currency unit as the "
+            "target medical-cost variable in the dataset."
         )
 
         # -------------------------------------------------
-        # Five-year projection
+        # Next-year cost prediction
         # -------------------------------------------------
 
         st.divider()
 
         st.subheader(
-            "Five-year medical-cost projection"
+            "Next-year medical-cost projection"
         )
 
-        projection_df = create_five_year_projection(
+        next_year_result = predict_next_year_cost(
             artifact=artifact,
             current_age=age,
             height_cm=height_cm,
@@ -671,62 +661,69 @@ if submitted:
             insurance_code=insurance_code,
         )
 
-        current_record = pd.DataFrame(
+        next_year_cost = float(
+            next_year_result["Predicted cost"]
+        )
+
+        cost_change = (
+            next_year_cost
+            - predicted_medical_cost
+        )
+
+        if predicted_medical_cost > 0:
+            percentage_change = (
+                cost_change
+                / predicted_medical_cost
+                * 100
+            )
+        else:
+            percentage_change = 0.0
+
+        st.metric(
+            label="Estimated inpatient medical cost next year",
+            value=f"{next_year_cost:,.2f}",
+            delta=f"{cost_change:,.2f}",
+        )
+
+        comparison_df = pd.DataFrame(
             {
-                "Year": [
-                    "Current"
+                "Period": [
+                    "Current prediction",
+                    "Next-year projection",
                 ],
-                "Age": [
-                    age
-                ],
-                "Projected cost": [
-                    predicted_medical_cost
+                "Medical cost": [
+                    predicted_medical_cost,
+                    next_year_cost,
                 ],
             }
         )
 
-        trend_df = pd.concat(
-            [
-                current_record,
-                projection_df,
-            ],
-            ignore_index=True,
-        )
-
-        chart_df = trend_df.set_index(
-            "Year"
-        )[["Projected cost"]]
-
-        st.line_chart(
-            chart_df,
+        st.bar_chart(
+            comparison_df.set_index(
+                "Period"
+            ),
             use_container_width=True,
         )
 
-        formatted_trend_df = (
-            trend_df.copy()
-        )
-
-        formatted_trend_df[
-            "Projected cost"
-        ] = formatted_trend_df[
-            "Projected cost"
-        ].map(
-            lambda value: f"{value:,.2f}"
-        )
-
-        st.dataframe(
-            formatted_trend_df,
-            use_container_width=True,
-            hide_index=True,
-        )
+        if percentage_change >= 0:
+            st.write(
+                "The projected cost is "
+                f"**{percentage_change:.2f}% higher** "
+                "than the current prediction."
+            )
+        else:
+            st.write(
+                "The projected cost is "
+                f"**{abs(percentage_change):.2f}% lower** "
+                "than the current prediction."
+            )
 
         st.warning(
-            "This is a scenario projection rather than a "
-            "validated time-series forecast. It assumes that "
-            "height, weight, outpatient cost, hospitalization "
-            "status, employment, health, chronic illness, and "
-            "insurance remain unchanged. Each predicted cost is "
-            "used as the following year's previous cost."
+            "The next-year value is a scenario projection, "
+            "not a validated time-series forecast. It assumes "
+            "that height, weight, outpatient cost, hospitalization "
+            "status, employment, health condition, chronic illness "
+            "status, and insurance category remain unchanged."
         )
 
         # -------------------------------------------------
@@ -736,7 +733,7 @@ if submitted:
         st.divider()
 
         st.subheader(
-            "Top factors influencing this prediction"
+            "Top factors influencing the current prediction"
         )
 
         try:
@@ -762,8 +759,10 @@ if submitted:
                 use_container_width=True,
             )
 
-            for _, row in top_contributors.iterrows():
-
+            for rank, (_, row) in enumerate(
+                top_contributors.iterrows(),
+                start=1,
+            ):
                 display_name = row[
                     "Display feature"
                 ]
@@ -775,16 +774,16 @@ if submitted:
                 if contribution >= 0:
                     icon = "⬆️"
                     direction = (
-                        "pushed the predicted cost higher"
+                        "increased the predicted cost"
                     )
                 else:
                     icon = "⬇️"
                     direction = (
-                        "pushed the predicted cost lower"
+                        "reduced the predicted cost"
                     )
 
                 st.write(
-                    f"{icon} **{display_name}** "
+                    f"{rank}. {icon} **{display_name}** "
                     f"{direction}."
                 )
 
@@ -816,16 +815,17 @@ if submitted:
 
                 st.caption(
                     "SHAP values are measured on the model's "
-                    "log-cost prediction scale. The absolute "
-                    "value indicates influence strength, while "
-                    "the sign indicates whether the feature "
-                    "increased or decreased the prediction."
+                    "log-cost scale. The absolute value represents "
+                    "the strength of influence, while the sign "
+                    "indicates whether the feature increased or "
+                    "decreased the prediction."
                 )
 
         except Exception as shap_error:
             st.warning(
-                "The prediction worked, but the SHAP "
-                f"explanation could not be generated: {shap_error}"
+                "The medical-cost prediction worked, but the "
+                "feature explanation could not be generated: "
+                f"{shap_error}"
             )
 
         # -------------------------------------------------
