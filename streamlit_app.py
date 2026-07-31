@@ -398,75 +398,36 @@ if submitted:
             "medical-cost variable in your dataset."
         )
 
-        def create_five_year_projection(
-    *,
-    artifact,
-    current_age,
-    height_cm,
-    weight_kg,
-    hospitalized_code,
-    outpatient_cost,
-    current_prediction,
-    employed_code,
-    health_code,
-    chronic_illness_code,
-    insurance_code,
-):
-    """
-    Create a five-year scenario projection.
-
-    Assumptions:
-    - Age increases by one each year.
-    - Height and weight remain unchanged.
-    - Healthcare, employment, health, chronic illness,
-      and insurance inputs remain unchanged.
-    - Each predicted cost becomes the next year's
-      previous inpatient cost.
-    """
-
-    projection_records = []
-
-    previous_cost = current_prediction
-
-    for year_number in range(1, 6):
-
-        future_age = current_age + year_number
-
-        future_input = create_model_features(
-            age=future_age,
-            height_cm=height_cm,
-            weight_kg=weight_kg,
-            hospitalized_code=hospitalized_code,
-            outpatient_cost=outpatient_cost,
-            previous_inpatient_cost=previous_cost,
-            employed_code=employed_code,
-            health_code=health_code,
-            chronic_illness_code=chronic_illness_code,
-            insurance_code=insurance_code,
-            required_features=artifact[
-                "feature_names"
-            ],
+       def extract_shap_values(
+        explainer,
+        model_input,
+    ):
+        """
+        Return SHAP values as a one-dimensional NumPy array.
+        Handles different SHAP return formats.
+        """
+    
+        shap_result = explainer(
+            model_input
         )
-
-        _, future_cost = predict_cost(
-            artifact,
-            future_input,
+    
+        if hasattr(shap_result, "values"):
+            values = shap_result.values
+        else:
+            values = shap_result
+    
+        values = np.asarray(values)
+    
+        if values.ndim == 1:
+            return values
+    
+        if values.ndim == 2:
+            return values[0]
+    
+        raise ValueError(
+            "Unexpected SHAP output shape: "
+            f"{values.shape}"
         )
-
-        projection_records.append(
-            {
-                "Year": f"Year {year_number}",
-                "Age": future_age,
-                "Projected cost": future_cost,
-            }
-        )
-
-        # Use this prediction as the next year's previous cost
-        previous_cost = future_cost
-
-    return pd.DataFrame(
-        projection_records
-    )
     
         # -------------------------------------------------
         # Technical details for testing
