@@ -113,6 +113,9 @@ FEATURE_LABELS = {
     "qp102": (
         "Body weight"
     ),
+    "log_qi202": (
+        "Retired Allowance"
+    ),
 }
 
 
@@ -174,6 +177,7 @@ def predict_next_year_cost(
     hospitalized_code,
     outpatient_cost,
     current_prediction,
+    retired_allowance,
     employed_code,
     health_code,
     chronic_illness_code,
@@ -207,6 +211,9 @@ def predict_next_year_cost(
         ),
         previous_inpatient_cost=(
             current_prediction
+        ),
+        qi202_value=(
+            retired_allowance
         ),
         employed_code=(
             employed_code
@@ -479,6 +486,7 @@ def validate_raw_inputs(
     weight_kg,
     outpatient_cost,
     previous_inpatient_cost,
+    retired_allowance,
 ):
     """
     Validate raw values entered through the UI.
@@ -509,6 +517,11 @@ def validate_raw_inputs(
     if previous_inpatient_cost < 0:
         errors.append(
             "Previous inpatient cost cannot be negative."
+        )
+
+    if retired_allowance < 0:
+        errors.append(
+            "Retired allowance cannot be negative."
         )
 
     bmi = (
@@ -707,6 +720,19 @@ with st.form(
         key="employment_input",
     )
 
+    retired_allowance = st.number_input(
+        "Retired allowance (QI202)",
+        min_value=0.0,
+        value=0.0,
+        step=100.0,
+        key="retired_allowance_input",
+        help=(
+            "Enter the raw QI202 retired-allowance value "
+            "using the same currency unit and survey period "
+            "as the training dataset."
+        ),
+    )
+
     insurance_label = st.selectbox(
         "Medical insurance category",
         options=[
@@ -750,6 +776,9 @@ if submitted:
             outpatient_cost=outpatient_cost,
             previous_inpatient_cost=(
                 previous_inpatient_cost
+            ),
+            retired_allowance=(
+                retired_allowance
             ),
         )
 
@@ -803,6 +832,9 @@ if submitted:
             ),
             previous_inpatient_cost=(
                 previous_inpatient_cost
+            ),
+            qi202_value=(
+                retired_allowance
             ),
             employed_code=(
                 employed_code
@@ -924,6 +956,9 @@ if submitted:
                 ),
                 current_prediction=(
                     predicted_medical_cost
+                ),
+                retired_allowance=(
+                    retired_allowance
                 ),
                 employed_code=(
                     employed_code
