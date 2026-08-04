@@ -9,3 +9,5 @@ google-genai
 lightgbm
 xgboost
 shap
+google-genai>=2.3.0
+requests
