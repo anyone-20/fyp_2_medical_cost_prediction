@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 import shap
 import streamlit as st
+import requests
 
 from google import genai
 from feature_engineering import create_model_features
@@ -171,6 +172,38 @@ MODEL_VERSION = (
 
 
 # ============================================================
+# CURRENCY DISPLAY OPTIONS
+# ============================================================
+
+CURRENCY_OPTIONS = {
+    "Chinese Yuan (CNY)": {
+        "code": "CNY",
+        "symbol": "¥",
+    },
+    "Malaysian Ringgit (MYR)": {
+        "code": "MYR",
+        "symbol": "RM",
+    },
+    "US Dollar (USD)": {
+        "code": "USD",
+        "symbol": "$",
+    },
+    "Singapore Dollar (SGD)": {
+        "code": "SGD",
+        "symbol": "S$",
+    },
+    "Euro (EUR)": {
+        "code": "EUR",
+        "symbol": "€",
+    },
+    "British Pound (GBP)": {
+        "code": "GBP",
+        "symbol": "£",
+    },
+}
+
+
+# ============================================================
 # 3. HUMAN-READABLE FEATURE LABELS
 # ============================================================
 
@@ -272,6 +305,168 @@ INSURANCE_MAPPING = {
     "Insurance category 6": 6,
     "No insurance": 78,
 }
+
+
+# ============================================================
+# CURRENCY CONVERSION SERVICE
+# ============================================================
+
+EXCHANGE_RATE_API_URL = (
+    "https://v6.exchangerate-api.com/v6/"
+    "{api_key}/latest/{base_currency}"
+)
+
+
+@st.cache_data(ttl=3600)
+def get_exchange_rates(
+    *,
+    api_key: str,
+    base_currency: str = "CNY",
+):
+    """
+    Retrieve and cache exchange rates for one hour.
+
+    ExchangeRate-API returns all supported target-currency
+    rates relative to the requested base currency.
+    """
+
+    if not api_key:
+        raise ValueError(
+            "EXCHANGE_RATE_API_KEY is missing."
+        )
+
+    base_currency = base_currency.strip().upper()
+
+    url = EXCHANGE_RATE_API_URL.format(
+        api_key=api_key,
+        base_currency=base_currency,
+    )
+
+    try:
+        response = requests.get(
+            url,
+            timeout=10,
+        )
+        response.raise_for_status()
+
+    except requests.Timeout as error:
+        raise RuntimeError(
+            "The exchange-rate service timed out."
+        ) from error
+
+    except requests.RequestException as error:
+        raise RuntimeError(
+            "Unable to connect to ExchangeRate-API."
+        ) from error
+
+    try:
+        data = response.json()
+
+    except ValueError as error:
+        raise RuntimeError(
+            "ExchangeRate-API returned invalid JSON."
+        ) from error
+
+    if data.get("result") != "success":
+        error_type = data.get(
+            "error-type",
+            "unknown-error",
+        )
+
+        raise RuntimeError(
+            f"ExchangeRate-API error: {error_type}"
+        )
+
+    rates = data.get(
+        "conversion_rates",
+        {}
+    )
+
+    if not rates:
+        raise RuntimeError(
+            "No exchange rates were returned."
+        )
+
+    return {
+        "base_currency": (
+            data.get("base_code")
+            or base_currency
+        ),
+        "rates": rates,
+        "last_updated": data.get(
+            "time_last_update_utc"
+        ),
+        "next_update": data.get(
+            "time_next_update_utc"
+        ),
+    }
+
+
+def convert_cny_amount(
+    *,
+    amount_cny: float,
+    target_currency: str,
+    api_key: str | None,
+):
+    """
+    Convert a non-negative CNY amount into a display currency.
+    """
+
+    if amount_cny < 0:
+        raise ValueError(
+            "The CNY amount cannot be negative."
+        )
+
+    target_currency = (
+        target_currency
+        .strip()
+        .upper()
+    )
+
+    if target_currency == "CNY":
+        return {
+            "rate": 1.0,
+            "converted_amount": float(
+                amount_cny
+            ),
+            "last_updated": None,
+            "next_update": None,
+        }
+
+    if not api_key:
+        raise ValueError(
+            "EXCHANGE_RATE_API_KEY was not found in "
+            "Streamlit Secrets."
+        )
+
+    rate_data = get_exchange_rates(
+        api_key=api_key,
+        base_currency="CNY",
+    )
+
+    rates = rate_data["rates"]
+
+    if target_currency not in rates:
+        raise ValueError(
+            f"Currency '{target_currency}' is unsupported."
+        )
+
+    rate = float(
+        rates[target_currency]
+    )
+
+    return {
+        "rate": rate,
+        "converted_amount": float(
+            amount_cny
+        ) * rate,
+        "last_updated": rate_data[
+            "last_updated"
+        ],
+        "next_update": rate_data[
+            "next_update"
+        ],
+    }
 
 
 # ============================================================
@@ -745,6 +940,60 @@ with st.expander(
         )
 
 
+with st.expander(
+    "Currency API connection test"
+):
+    if EXCHANGE_RATE_API_KEY:
+        st.success(
+            "Exchange-rate API key was loaded from "
+            "Streamlit Secrets."
+        )
+
+        if st.button(
+            "Test CNY to MYR conversion",
+            key="test_currency_connection_button",
+        ):
+            try:
+                with st.spinner(
+                    "Testing ExchangeRate-API..."
+                ):
+                    test_conversion = (
+                        convert_cny_amount(
+                            amount_cny=100.0,
+                            target_currency="MYR",
+                            api_key=(
+                                EXCHANGE_RATE_API_KEY
+                            ),
+                        )
+                    )
+
+                st.success(
+                    "Currency API connection successful."
+                )
+
+                st.write(
+                    "100 CNY is approximately "
+                    f"RM"
+                    f"{test_conversion['converted_amount']:,.2f}."
+                )
+
+                st.write(
+                    "Rate used:",
+                    test_conversion["rate"],
+                )
+
+            except Exception as error:
+                st.error(
+                    "Currency API connection failed: "
+                    f"{error}"
+                )
+    else:
+        st.error(
+            "EXCHANGE_RATE_API_KEY was not found in "
+            "Streamlit Community Cloud Secrets."
+        )
+
+
 # ============================================================
 # 11. USER INPUT FORM
 # ============================================================
@@ -908,6 +1157,24 @@ with st.form(
         ),
     )
 
+    st.subheader(
+        "Display preference"
+    )
+
+    selected_currency_label = st.selectbox(
+        "Display predicted cost in",
+        options=list(
+            CURRENCY_OPTIONS.keys()
+        ),
+        index=1,
+        key="display_currency_input",
+        help=(
+            "The model prediction remains in Chinese yuan. "
+            "The selected currency is used only to display "
+            "an approximate converted value."
+        ),
+    )
+
     submitted = st.form_submit_button(
         "Predict medical cost",
         use_container_width=True,
@@ -1049,6 +1316,57 @@ if submitted:
             ]
         )
 
+        selected_currency = (
+            CURRENCY_OPTIONS[
+                selected_currency_label
+            ]
+        )
+
+        selected_currency_code = (
+            selected_currency["code"]
+        )
+
+        selected_currency_symbol = (
+            selected_currency["symbol"]
+        )
+
+        currency_result = None
+        currency_error_message = None
+
+        try:
+            currency_result = convert_cny_amount(
+                amount_cny=(
+                    predicted_medical_cost
+                ),
+                target_currency=(
+                    selected_currency_code
+                ),
+                api_key=(
+                    EXCHANGE_RATE_API_KEY
+                ),
+            )
+
+        except Exception as currency_error:
+            currency_error_message = str(
+                currency_error
+            )
+
+        converted_cost_for_chat = float(
+            predicted_medical_cost
+        )
+
+        exchange_rate_for_chat = None
+
+        if currency_result is not None:
+            converted_cost_for_chat = float(
+                currency_result[
+                    "converted_amount"
+                ]
+            )
+            exchange_rate_for_chat = float(
+                currency_result["rate"]
+            )
+
         # Store limited, prediction-aware context for Gemini.
         # Raw monetary input fields are intentionally excluded.
         st.session_state.latest_prediction_context = {
@@ -1057,6 +1375,18 @@ if submitted:
             ),
             "predicted_log_cost": float(
                 predicted_log_cost
+            ),
+            "display_currency": (
+                selected_currency_code
+            ),
+            "display_currency_symbol": (
+                selected_currency_symbol
+            ),
+            "converted_cost": (
+                converted_cost_for_chat
+            ),
+            "exchange_rate": (
+                exchange_rate_for_chat
             ),
             "bmi": float(
                 validated_bmi
@@ -1078,16 +1408,57 @@ if submitted:
 
         st.metric(
             label=(
-                "Estimated current inpatient medical cost"
+                "Estimated inpatient medical cost "
+                "in Chinese yuan"
             ),
             value=(
-                f"{predicted_medical_cost:,.2f}"
+                f"¥{predicted_medical_cost:,.2f} CNY"
             ),
         )
 
+        if (
+            currency_result is not None
+            and selected_currency_code != "CNY"
+        ):
+            st.metric(
+                label="Approximate converted cost",
+                value=(
+                    f"{selected_currency_symbol}"
+                    f"{currency_result['converted_amount']:,.2f} "
+                    f"{selected_currency_code}"
+                ),
+            )
+
+            st.caption(
+                "Exchange rate used: "
+                f"1 CNY = "
+                f"{currency_result['rate']:.6f} "
+                f"{selected_currency_code}"
+            )
+
+            if currency_result["last_updated"]:
+                st.caption(
+                    "Exchange-rate update time: "
+                    f"{currency_result['last_updated']}"
+                )
+
+            st.warning(
+                "The converted value is approximate. Banks, "
+                "cards, and payment providers may use "
+                "different rates or fees."
+            )
+
+        elif currency_error_message:
+            st.warning(
+                "The model prediction succeeded, but "
+                "currency conversion was unavailable: "
+                f"{currency_error_message}"
+            )
+
         st.caption(
-            "The amount uses the same currency unit as the "
-            "medical-cost target variable in the dataset."
+            "The model's original output remains in Chinese "
+            "yuan because the target variable was trained in "
+            "that currency."
         )
 
         # ----------------------------------------------------
@@ -1181,12 +1552,43 @@ if submitted:
                 "Estimated inpatient medical cost next year"
             ),
             value=(
-                f"{next_year_cost:,.2f}"
+                f"¥{next_year_cost:,.2f} CNY"
             ),
             delta=(
-                f"{cost_change:,.2f}"
+                f"¥{cost_change:,.2f} CNY"
             ),
         )
+
+        if (
+            currency_result is not None
+            and selected_currency_code != "CNY"
+        ):
+            next_year_converted = (
+                next_year_cost
+                * currency_result["rate"]
+            )
+
+            converted_change = (
+                next_year_converted
+                - currency_result[
+                    "converted_amount"
+                ]
+            )
+
+            st.metric(
+                label=(
+                    "Approximate next-year converted cost"
+                ),
+                value=(
+                    f"{selected_currency_symbol}"
+                    f"{next_year_converted:,.2f} "
+                    f"{selected_currency_code}"
+                ),
+                delta=(
+                    f"{selected_currency_symbol}"
+                    f"{converted_change:,.2f}"
+                ),
+            )
 
         comparison_df = pd.DataFrame(
             {
@@ -1615,11 +2017,9 @@ st.subheader(
 )
 
 st.caption(
-    "Ask about your predicted medical cost, SHAP factors, "
-    "or ways to understand and manage healthcare expenses. "
-    "The assistant provides general educational information "
-    "only and does not provide medical diagnosis, treatment, "
-    "or personalised financial advice."
+    "Ask about the estimated cost, SHAP factors, or how to "
+    "interpret the model output. This assistant does not "
+    "provide medical diagnosis or treatment advice."
 )
 
 if st.session_state.latest_prediction_context is None:
@@ -1734,6 +2134,17 @@ Predicted inpatient medical cost:
 Log-scale prediction:
 {prediction_context['predicted_log_cost']:.4f}
 
+Selected display currency:
+{prediction_context['display_currency']}
+
+Approximate converted cost:
+{prediction_context['display_currency_symbol']}
+{prediction_context['converted_cost']:,.2f}
+{prediction_context['display_currency']}
+
+Exchange rate from CNY:
+{prediction_context.get('exchange_rate')}
+
 Age:
 {prediction_context['age']}
 
@@ -1779,54 +2190,24 @@ The prediction is produced by a blended LightGBM and XGBoost
 regression model trained using historical CFPS survey data.
 
 Rules:
-
 1. Explain the predicted cost in simple language.
-
-2. Explain which SHAP factors increased or decreased the prediction.
-
-3. Explain that SHAP describes how the machine-learning model made its prediction and does not prove medical causation.
-
-4. Clearly state that the prediction is only an estimate based on historical CFPS survey data.
-
-5. Never diagnose diseases.
-
-6. Never prescribe medication or recommend medical treatment.
-
-7. If users ask how to reduce medical costs, you MAY provide
-general educational suggestions such as:
-
-- maintaining a healthy lifestyle;
-- attending regular preventive health check-ups;
-- checking insurance coverage;
-- requesting an itemised medical bill;
-- comparing healthcare providers when appropriate;
-- discussing payment plans with healthcare providers;
-- reducing avoidable hospital admissions through appropriate preventive care.
-
-8. Never recommend a specific insurance company, financial product,
-hospital, doctor, medicine or treatment.
-
-9. Never guarantee that any suggestion will reduce healthcare costs.
-
-10. If the user asks about medical symptoms,
-politely explain that you cannot provide medical advice and encourage consultation with a qualified healthcare professional.
-
-11. Do not invent model predictions, SHAP values or patient information.
-
-12. Keep answers concise, friendly and easy to understand.
-
-Write naturally and conversationally.
-
-Avoid repeatedly saying
-"I cannot provide medical advice."
-
-Only mention that limitation when the user actually asks for diagnosis, medication or treatment.
+2. Explain SHAP factors and whether each factor increased or
+   decreased the model prediction.
+3. State that SHAP describes model behaviour and does not
+   prove medical causation.
+4. State that the prediction is an estimate, not a guaranteed
+   medical bill.
+5. Do not diagnose diseases.
+6. Do not recommend medication, treatment, insurance plans,
+   or financial products.
+7. Do not invent values, model metrics, or patient details.
+8. Explain that converted currency values are approximate
+   and may differ from bank or payment-provider rates.
+9. Encourage consultation with qualified healthcare or
+   financial professionals for personal decisions.
+10. Keep the response concise and directly relevant.
 
 {prediction_text}
-
-When the user asks about their prediction,
-always explain the prediction first using the available
-prediction context before answering any additional question.
 
 Recent conversation:
 {conversation_text}
