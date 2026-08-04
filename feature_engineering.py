@@ -10,6 +10,7 @@ def create_model_features(
     hospitalized_code,
     outpatient_cost,
     previous_inpatient_cost,
+    qi202_value,
     employed_code,
     health_code,
     chronic_illness_code,
@@ -44,17 +45,25 @@ def create_model_features(
             "Previous inpatient cost cannot be negative."
         )
 
-    # Calculate BMI
+    if qi202_value < 0:
+        raise ValueError(
+            "Retired allowance cannot be negative."
+        )
+
+    # Calculate BMI.
     height_m = height_cm / 100
     bmi = weight_kg / (height_m ** 2)
 
-    # Apply the same log1p transformations used during training
+    # Apply the same log1p transformations used during training.
     log_qc7b = np.log1p(outpatient_cost)
     log_past_qc701 = np.log1p(
         previous_inpatient_cost
     )
+    log_qi202 = np.log1p(
+        qi202_value
+    )
 
-    # Create all possible model features
+    # Create every feature that the deployed model may require.
     all_features = pd.DataFrame(
         {
             "log_qc7b": [log_qc7b],
@@ -103,8 +112,13 @@ def create_model_features(
             "qp102": [
                 weight_kg / 0.5
             ],
+            "log_qi202": [
+                log_qi202
+            ],
         }
     )
+
+    required_features = list(required_features)
 
     missing_features = [
         feature
@@ -118,4 +132,6 @@ def create_model_features(
             f"features: {missing_features}"
         )
 
-    return all_features[required_features]
+    return all_features[
+        required_features
+    ].copy()
