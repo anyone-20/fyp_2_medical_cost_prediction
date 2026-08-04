@@ -37,7 +37,7 @@ BASE_DIR = Path(__file__).resolve().parent
 
 MODEL_PATH = (
     BASE_DIR
-    / "gradient_boosting_pipeline.pkl"
+    / "medical_cost_model.pkl"
 )
 
 MODEL_VERSION = (
