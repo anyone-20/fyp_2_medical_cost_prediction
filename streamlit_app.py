@@ -12,12 +12,71 @@ import streamlit as st
 
 from feature_engineering import create_model_features
 
+from external_services import (
+    convert_currency,
+    create_gemini_client,
+    generate_chatbot_response,
+)
+
 from model_service import (
     load_model_artifact,
     predict_cost,
 )
 
+# ============================================================
+# READ STREAMLIT SECRETS
+# ============================================================
 
+def get_secret(
+    key: str,
+) -> str | None:
+    """
+    Read a Streamlit secret without crashing the app.
+    """
+
+    try:
+        return str(
+            st.secrets[key]
+        )
+
+    except KeyError:
+        return None
+
+
+GEMINI_API_KEY = get_secret(
+    "GEMINI_API_KEY"
+)
+
+EXCHANGE_RATE_API_KEY = get_secret(
+    "EXCHANGE_RATE_API_KEY"
+)
+
+# ============================================================
+# GEMINI CLIENT
+# ============================================================
+
+@st.cache_resource
+def load_gemini_client(
+    api_key: str,
+):
+    return create_gemini_client(
+        api_key
+    )
+
+
+if GEMINI_API_KEY:
+
+    try:
+        gemini_client = load_gemini_client(
+            GEMINI_API_KEY
+        )
+
+    except Exception:
+        gemini_client = None
+
+else:
+    gemini_client = None
+    
 # ============================================================
 # 1. PAGE CONFIGURATION
 # ============================================================
