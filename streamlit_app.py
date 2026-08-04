@@ -10,18 +10,25 @@ import pandas as pd
 import shap
 import streamlit as st
 
+from google import genai
 from feature_engineering import create_model_features
-
-from external_services import (
-    convert_currency,
-    create_gemini_client,
-    generate_chatbot_response,
-)
 
 from model_service import (
     load_model_artifact,
     predict_cost,
 )
+
+# ============================================================
+# PAGE CONFIGURATION
+# Must be the first Streamlit command in the script.
+# ============================================================
+
+st.set_page_config(
+    page_title="Medical Cost Prediction",
+    page_icon="🏥",
+    layout="centered",
+)
+
 
 # ============================================================
 # READ STREAMLIT SECRETS
@@ -52,36 +59,6 @@ EXCHANGE_RATE_API_KEY = get_secret(
 )
 
 # ============================================================
-# TEMPORARY TEST
-# ============================================================
-
-if GEMINI_API_KEY:
-    st.success("✅ Gemini API key loaded successfully.")
-else:
-    st.error("❌ Gemini API key not found.")
-
-from google import genai
-
-if st.button("🧪 Test Gemini"):
-
-    try:
-
-        client = genai.Client(
-            api_key=GEMINI_API_KEY
-        )
-
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents="Reply with only: Gemini is working!"
-        )
-
-        st.success(response.text)
-
-    except Exception as e:
-
-        st.error(e)
-        
-# ============================================================
 # GEMINI CLIENT
 # ============================================================
 
@@ -89,8 +66,12 @@ if st.button("🧪 Test Gemini"):
 def load_gemini_client(
     api_key: str,
 ):
-    return create_gemini_client(
-        api_key
+    """
+    Create and cache the Gemini API client.
+    """
+
+    return genai.Client(
+        api_key=api_key
     )
 
 
@@ -101,23 +82,78 @@ if GEMINI_API_KEY:
             GEMINI_API_KEY
         )
 
-    except Exception:
+        gemini_available = True
+
+    except Exception as error:
         gemini_client = None
+        gemini_available = False
+
+        st.warning(
+            "Gemini could not be initialized: "
+            f"{error}"
+        )
 
 else:
     gemini_client = None
+    gemini_available = False
+
+# ============================================================
+# GEMINI CONNECTION TEST
+# ============================================================
+
+def test_gemini_connection() -> str:
+    """
+    Send a minimal request to confirm that the configured
+    Gemini API key and client are working.
+    """
+
+    if not gemini_available or gemini_client is None:
+        raise RuntimeError(
+            "Gemini is unavailable. Check GEMINI_API_KEY "
+            "in Streamlit Community Cloud Secrets."
+        )
+
+    response = gemini_client.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=(
+            "Reply with exactly: Gemini connection successful."
+        ),
+    )
+
+    response_text = getattr(response, "text", None)
+
+    if not response_text:
+        raise RuntimeError(
+            "Gemini returned an empty response."
+        )
+
+    return response_text.strip()
+
+
+# ============================================================
+# INITIALIZE CHAT AND PREDICTION STATE
+# ============================================================
+
+if "chat_messages" not in st.session_state:
+
+    st.session_state.chat_messages = [
+        {
+            "role": "assistant",
+            "content": (
+                "Hello! I can explain your predicted "
+                "inpatient medical cost, the important "
+                "model factors, and the meaning of the "
+                "result. I cannot provide a medical "
+                "diagnosis or treatment advice."
+            ),
+        }
+    ]
+
+
+if "latest_prediction_context" not in st.session_state:
+
+    st.session_state.latest_prediction_context = None
     
-# ============================================================
-# 1. PAGE CONFIGURATION
-# ============================================================
-
-st.set_page_config(
-    page_title="Medical Cost Prediction",
-    page_icon="🏥",
-    layout="centered",
-)
-
-
 # ============================================================
 # 2. PATH AND MODEL INFORMATION
 # ============================================================
@@ -677,6 +713,38 @@ st.caption(
 )
 
 
+with st.expander(
+    "Gemini connection test"
+):
+    if GEMINI_API_KEY:
+        st.success(
+            "Gemini API key was loaded from Streamlit Secrets."
+        )
+
+        if st.button(
+            "Test Gemini connection",
+            key="test_gemini_connection_button",
+        ):
+            try:
+                with st.spinner(
+                    "Testing Gemini..."
+                ):
+                    test_result = test_gemini_connection()
+
+                st.success(test_result)
+
+            except Exception as error:
+                st.error(
+                    "Gemini connection failed: "
+                    f"{error}"
+                )
+    else:
+        st.error(
+            "GEMINI_API_KEY was not found in "
+            "Streamlit Community Cloud Secrets."
+        )
+
+
 # ============================================================
 # 11. USER INPUT FORM
 # ============================================================
@@ -981,6 +1049,29 @@ if submitted:
             ]
         )
 
+        # Store limited, prediction-aware context for Gemini.
+        # Raw monetary input fields are intentionally excluded.
+        st.session_state.latest_prediction_context = {
+            "predicted_cost_cny": float(
+                predicted_medical_cost
+            ),
+            "predicted_log_cost": float(
+                predicted_log_cost
+            ),
+            "bmi": float(
+                validated_bmi
+            ),
+            "age": int(
+                age
+            ),
+            "hospitalized": hospitalized_label,
+            "chronic_illness": chronic_illness_label,
+            "health_status": health_label,
+            "employment_status": employed_label,
+            "insurance_category": insurance_label,
+            "top_factors": [],
+        }
+
         st.success(
             "Prediction completed successfully."
         )
@@ -1161,6 +1252,35 @@ if submitted:
                     top_n=3,
                 )
             )
+
+            top_factor_context = []
+
+            for _, contributor_row in (
+                top_contributors.iterrows()
+            ):
+                top_factor_context.append(
+                    {
+                        "feature": contributor_row[
+                            "Display feature"
+                        ],
+                        "effect": contributor_row[
+                            "Effect"
+                        ],
+                        "contribution": float(
+                            contributor_row[
+                                "SHAP contribution"
+                            ]
+                        ),
+                    }
+                )
+
+            if (
+                st.session_state.latest_prediction_context
+                is not None
+            ):
+                st.session_state.latest_prediction_context[
+                    "top_factors"
+                ] = top_factor_context
 
             contribution_chart = (
                 top_contributors
@@ -1481,3 +1601,243 @@ if submitted:
             "Prediction failed: "
             f"{error}"
         )
+
+# ============================================================
+# GEMINI PREDICTION-AWARE CHATBOT
+# This section is intentionally outside the prediction form
+# and outside `if submitted`, so it is always visible.
+# ============================================================
+
+st.divider()
+
+st.subheader(
+    "💬 Medical Cost Prediction Assistant"
+)
+
+st.caption(
+    "Ask about the estimated cost, SHAP factors, or how to "
+    "interpret the model output. This assistant does not "
+    "provide medical diagnosis or treatment advice."
+)
+
+if st.session_state.latest_prediction_context is None:
+    st.info(
+        "Generate a medical-cost prediction first for a "
+        "personalised explanation. General model questions "
+        "can still be asked."
+    )
+else:
+    latest_cost = (
+        st.session_state.latest_prediction_context[
+            "predicted_cost_cny"
+        ]
+    )
+
+    st.success(
+        "Latest prediction available to the assistant: "
+        f"¥{latest_cost:,.2f} CNY."
+    )
+
+if st.button(
+    "Clear chat",
+    key="clear_gemini_chat",
+):
+    st.session_state.chat_messages = [
+        {
+            "role": "assistant",
+            "content": (
+                "Chat history cleared. I can explain the "
+                "medical-cost prediction and model factors."
+            ),
+        }
+    ]
+    st.rerun()
+
+for message in st.session_state.chat_messages:
+    with st.chat_message(
+        message["role"]
+    ):
+        st.markdown(
+            message["content"]
+        )
+
+user_message = st.chat_input(
+    "Ask why the cost is high or what the factors mean",
+    key="medical_cost_chat_input",
+)
+
+if user_message:
+    st.session_state.chat_messages.append(
+        {
+            "role": "user",
+            "content": user_message,
+        }
+    )
+
+    with st.chat_message("user"):
+        st.markdown(user_message)
+
+    with st.chat_message("assistant"):
+        if not gemini_available or gemini_client is None:
+            assistant_response = (
+                "The Gemini assistant is currently "
+                "unavailable. Check the API key and the "
+                "google-genai dependency."
+            )
+        else:
+            try:
+                prediction_context = (
+                    st.session_state.latest_prediction_context
+                )
+
+                if prediction_context is None:
+                    prediction_text = """
+No prediction has been generated in this session.
+Explain the model only in general terms. Do not claim to
+know the user's cost or personal contributing factors.
+"""
+                else:
+                    top_factors = prediction_context.get(
+                        "top_factors",
+                        [],
+                    )
+
+                    if top_factors:
+                        factor_lines = []
+
+                        for factor in top_factors:
+                            factor_lines.append(
+                                "- "
+                                f"{factor['feature']}: "
+                                f"{factor['effect']} "
+                                f"(SHAP contribution "
+                                f"{factor['contribution']:.4f})"
+                            )
+
+                        factor_text = "\n".join(
+                            factor_lines
+                        )
+                    else:
+                        factor_text = (
+                            "SHAP contributors are unavailable "
+                            "for this prediction."
+                        )
+
+                    prediction_text = f"""
+Latest model context:
+
+Predicted inpatient medical cost:
+¥{prediction_context['predicted_cost_cny']:,.2f} CNY
+
+Log-scale prediction:
+{prediction_context['predicted_log_cost']:.4f}
+
+Age:
+{prediction_context['age']}
+
+Calculated BMI:
+{prediction_context['bmi']:.2f}
+
+Hospitalized during the survey period:
+{prediction_context['hospitalized']}
+
+Chronic illness:
+{prediction_context['chronic_illness']}
+
+Self-rated health:
+{prediction_context['health_status']}
+
+Employment status:
+{prediction_context['employment_status']}
+
+Insurance category:
+{prediction_context['insurance_category']}
+
+Top model contributors:
+{factor_text}
+"""
+
+                recent_messages = (
+                    st.session_state.chat_messages[-8:]
+                )
+
+                conversation_text = "\n".join(
+                    (
+                        f"{message['role']}: "
+                        f"{message['content']}"
+                    )
+                    for message in recent_messages
+                )
+
+                gemini_prompt = f"""
+You are an educational assistant inside a machine-learning
+application that estimates inpatient medical costs.
+
+The prediction is produced by a blended LightGBM and XGBoost
+regression model trained using historical CFPS survey data.
+
+Rules:
+1. Explain the predicted cost in simple language.
+2. Explain SHAP factors and whether each factor increased or
+   decreased the model prediction.
+3. State that SHAP describes model behaviour and does not
+   prove medical causation.
+4. State that the prediction is an estimate, not a guaranteed
+   medical bill.
+5. Do not diagnose diseases.
+6. Do not recommend medication, treatment, insurance plans,
+   or financial products.
+7. Do not invent values, model metrics, or patient details.
+8. Encourage consultation with qualified healthcare or
+   financial professionals for personal decisions.
+9. Keep the response concise and directly relevant.
+
+{prediction_text}
+
+Recent conversation:
+{conversation_text}
+
+Latest user message:
+{user_message}
+"""
+
+                with st.spinner(
+                    "Generating explanation..."
+                ):
+                    gemini_response = (
+                        gemini_client.models.generate_content(
+                            model="gemini-2.5-flash",
+                            contents=gemini_prompt,
+                        )
+                    )
+
+                response_text = getattr(
+                    gemini_response,
+                    "text",
+                    None,
+                )
+
+                if not response_text:
+                    assistant_response = (
+                        "Gemini returned an empty response. "
+                        "Please try again."
+                    )
+                else:
+                    assistant_response = (
+                        response_text.strip()
+                    )
+
+            except Exception as error:
+                assistant_response = (
+                    "The assistant could not generate a "
+                    f"response: {error}"
+                )
+
+        st.markdown(assistant_response)
+
+    st.session_state.chat_messages.append(
+        {
+            "role": "assistant",
+            "content": assistant_response,
+        }
+    )
