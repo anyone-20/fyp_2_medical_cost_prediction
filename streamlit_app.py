@@ -52,6 +52,15 @@ EXCHANGE_RATE_API_KEY = get_secret(
 )
 
 # ============================================================
+# TEMPORARY TEST
+# ============================================================
+
+if GEMINI_API_KEY:
+    st.success("✅ Gemini API key loaded successfully.")
+else:
+    st.error("❌ Gemini API key not found.")
+
+# ============================================================
 # GEMINI CLIENT
 # ============================================================
 
