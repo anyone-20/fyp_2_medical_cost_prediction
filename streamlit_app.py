@@ -60,6 +60,27 @@ if GEMINI_API_KEY:
 else:
     st.error("❌ Gemini API key not found.")
 
+from google import genai
+
+if st.button("🧪 Test Gemini"):
+
+    try:
+
+        client = genai.Client(
+            api_key=GEMINI_API_KEY
+        )
+
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents="Reply with only: Gemini is working!"
+        )
+
+        st.success(response.text)
+
+    except Exception as e:
+
+        st.error(e)
+        
 # ============================================================
 # GEMINI CLIENT
 # ============================================================
