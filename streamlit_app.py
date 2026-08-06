@@ -29,11 +29,53 @@ st.set_page_config(
 
 # ============================================================
 # 1A. USER-INTERFACE STYLING
+# Warm, homely, and caring visual theme
 # ============================================================
 
 st.markdown(
     """
     <style>
+    /* --------------------------------------------------------
+       Warm care theme
+       -------------------------------------------------------- */
+
+    :root {
+        --care-cream: #fffaf3;
+        --care-ivory: #fffdf9;
+        --care-peach: #f7dfd2;
+        --care-rose: #d98f83;
+        --care-rose-dark: #a95f57;
+        --care-sage: #a8b8a0;
+        --care-sage-dark: #667a62;
+        --care-brown: #5f4a43;
+        --care-muted: #806e67;
+        --care-border: rgba(143, 104, 90, 0.20);
+        --care-shadow: 0 10px 30px rgba(110, 78, 64, 0.10);
+        --care-shadow-soft: 0 5px 18px rgba(110, 78, 64, 0.08);
+    }
+
+    /* Main application background */
+    .stApp {
+        background:
+            radial-gradient(
+                circle at top left,
+                rgba(247, 223, 210, 0.58),
+                transparent 34%
+            ),
+            radial-gradient(
+                circle at top right,
+                rgba(218, 229, 210, 0.52),
+                transparent 31%
+            ),
+            linear-gradient(
+                180deg,
+                #fffaf3 0%,
+                #fffdf9 48%,
+                #fff8f0 100%
+            );
+        color: var(--care-brown);
+    }
+
     /* Main page spacing */
     .block-container {
         max-width: 1120px;
@@ -41,169 +83,459 @@ st.markdown(
         padding-bottom: 5.5rem;
     }
 
+    /* Main text */
+    html,
+    body,
+    [class*="css"] {
+        color: var(--care-brown);
+    }
+
+    p,
+    label,
+    .stMarkdown,
+    .stCaption {
+        color: var(--care-brown);
+    }
+
+    h1,
+    h2,
+    h3,
+    h4 {
+        color: #65483f;
+        letter-spacing: -0.015em;
+    }
+
     /* Hide Streamlit's default footer */
     footer {
         visibility: hidden;
     }
 
-    /* Hero section */
+    /* --------------------------------------------------------
+       Hero section
+       -------------------------------------------------------- */
+
     .app-hero {
-        padding: 1.35rem 1.45rem;
-        border: 1px solid rgba(49, 51, 63, 0.15);
-        border-radius: 18px;
-        margin-bottom: 1rem;
-        background: linear-gradient(
-            135deg,
-            rgba(240, 248, 255, 0.95),
-            rgba(248, 250, 252, 0.95)
-        );
+        position: relative;
+        overflow: hidden;
+        padding: 1.65rem 1.7rem;
+        border: 1px solid rgba(169, 95, 87, 0.20);
+        border-radius: 24px;
+        margin-bottom: 1.15rem;
+        background:
+            linear-gradient(
+                135deg,
+                rgba(255, 246, 236, 0.98),
+                rgba(249, 226, 214, 0.95)
+            );
+        box-shadow: var(--care-shadow);
+    }
+
+    .app-hero::after {
+        content: "♡";
+        position: absolute;
+        right: 1.25rem;
+        top: 0.15rem;
+        font-size: 5.6rem;
+        line-height: 1;
+        color: rgba(169, 95, 87, 0.10);
+        transform: rotate(-8deg);
+        pointer-events: none;
     }
 
     .app-hero h1 {
+        position: relative;
+        z-index: 1;
         margin: 0;
-        font-size: 2rem;
+        color: #6f4a42;
+        font-size: 2.1rem;
         line-height: 1.2;
+        font-weight: 750;
     }
 
     .app-hero p {
-        margin: 0.55rem 0 0 0;
-        opacity: 0.8;
+        position: relative;
+        z-index: 1;
+        margin: 0.65rem 0 0 0;
+        color: #80665e;
         font-size: 1rem;
+        line-height: 1.55;
+        max-width: 820px;
     }
 
-    /* Information cards */
+    /* --------------------------------------------------------
+       Information cards
+       -------------------------------------------------------- */
+
     .info-card {
-        padding: 1rem 1.1rem;
-        border: 1px solid rgba(49, 51, 63, 0.12);
-        border-radius: 15px;
-        background: rgba(255, 255, 255, 0.75);
-        min-height: 110px;
+        padding: 1.1rem 1.15rem;
+        border: 1px solid var(--care-border);
+        border-radius: 18px;
+        background: rgba(255, 253, 249, 0.88);
+        min-height: 118px;
+        box-shadow: var(--care-shadow-soft);
+        transition:
+            transform 180ms ease,
+            box-shadow 180ms ease,
+            border-color 180ms ease;
+    }
+
+    .info-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 24px rgba(110, 78, 64, 0.12);
+        border-color: rgba(169, 95, 87, 0.30);
     }
 
     .info-card-title {
-        font-size: 0.78rem;
-        font-weight: 700;
+        color: var(--care-rose-dark);
+        font-size: 0.76rem;
+        font-weight: 750;
         text-transform: uppercase;
-        letter-spacing: 0.05em;
-        opacity: 0.65;
-        margin-bottom: 0.35rem;
+        letter-spacing: 0.07em;
+        margin-bottom: 0.38rem;
     }
 
     .info-card-value {
-        font-size: 1.05rem;
-        font-weight: 700;
-        margin-bottom: 0.2rem;
+        color: #65483f;
+        font-size: 1.08rem;
+        font-weight: 750;
+        margin-bottom: 0.25rem;
     }
 
     .info-card-text {
-        font-size: 0.88rem;
-        opacity: 0.75;
-        line-height: 1.4;
+        color: var(--care-muted);
+        font-size: 0.89rem;
+        line-height: 1.45;
     }
 
-    /* Form container */
+    /* --------------------------------------------------------
+       Forms and input controls
+       -------------------------------------------------------- */
+
     div[data-testid="stForm"] {
-        border: 1px solid rgba(49, 51, 63, 0.13);
+        border: 1px solid var(--care-border);
+        border-radius: 22px;
+        padding: 1.3rem 1.35rem 1.4rem 1.35rem;
+        background: rgba(255, 253, 249, 0.90);
+        box-shadow: var(--care-shadow);
+    }
+
+    div[data-baseweb="input"] > div,
+    div[data-baseweb="select"] > div,
+    div[data-baseweb="base-input"] {
+        border-radius: 12px !important;
+        border-color: rgba(143, 104, 90, 0.24) !important;
+        background: rgba(255, 255, 255, 0.92) !important;
+    }
+
+    div[data-baseweb="input"] > div:focus-within,
+    div[data-baseweb="select"] > div:focus-within {
+        border-color: var(--care-rose) !important;
+        box-shadow: 0 0 0 2px rgba(217, 143, 131, 0.16) !important;
+    }
+
+    input,
+    textarea {
+        color: var(--care-brown) !important;
+    }
+
+    /* Section dividers */
+    hr {
+        border-color: rgba(143, 104, 90, 0.16) !important;
+    }
+
+    /* Informational messages */
+    div[data-testid="stAlert"] {
+        border-radius: 15px;
+        border: 1px solid rgba(143, 104, 90, 0.16);
+        box-shadow: var(--care-shadow-soft);
+    }
+
+    /* --------------------------------------------------------
+       Buttons
+       -------------------------------------------------------- */
+
+    button {
+        border-radius: 12px !important;
+    }
+
+    div[data-testid="stFormSubmitButton"] button {
+        min-height: 3.15rem;
+        border: 1px solid #b96f64;
+        border-radius: 14px !important;
+        background:
+            linear-gradient(
+                135deg,
+                #d98f83,
+                #bd7067
+            ) !important;
+        color: #ffffff !important;
+        font-weight: 750;
+        box-shadow: 0 8px 20px rgba(169, 95, 87, 0.22);
+        transition:
+            transform 160ms ease,
+            box-shadow 160ms ease,
+            filter 160ms ease;
+    }
+
+    div[data-testid="stFormSubmitButton"] button:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 11px 24px rgba(169, 95, 87, 0.28);
+        filter: brightness(1.02);
+    }
+
+    div[data-testid="stDownloadButton"] button,
+    .stButton button {
+        border: 1px solid rgba(169, 95, 87, 0.30);
+        background: rgba(255, 250, 243, 0.95);
+        color: var(--care-rose-dark);
+        font-weight: 650;
+    }
+
+    div[data-testid="stDownloadButton"] button:hover,
+    .stButton button:hover {
+        border-color: var(--care-rose);
+        background: #fff4ec;
+        color: #8e5049;
+    }
+
+    /* --------------------------------------------------------
+       Metrics and result cards
+       -------------------------------------------------------- */
+
+    div[data-testid="stMetric"] {
+        border: 1px solid var(--care-border);
         border-radius: 18px;
-        padding: 1.1rem 1.2rem 1.25rem 1.2rem;
-        background: rgba(255, 255, 255, 0.72);
+        padding: 1rem 1.1rem;
+        background:
+            linear-gradient(
+                145deg,
+                rgba(255, 253, 249, 0.96),
+                rgba(255, 244, 235, 0.93)
+            );
+        box-shadow: var(--care-shadow-soft);
+    }
+
+    div[data-testid="stMetricLabel"] {
+        color: var(--care-muted);
+    }
+
+    div[data-testid="stMetricValue"] {
+        color: #6e4b43;
+    }
+
+    /* --------------------------------------------------------
+       Expanders, tables, and charts
+       -------------------------------------------------------- */
+
+    div[data-testid="stExpander"] {
+        border: 1px solid var(--care-border);
+        border-radius: 15px;
+        overflow: hidden;
+        background: rgba(255, 253, 249, 0.82);
+        box-shadow: var(--care-shadow-soft);
+    }
+
+    div[data-testid="stExpander"] details summary {
+        color: #6f4a42;
+        font-weight: 650;
+    }
+
+    div[data-testid="stDataFrame"] {
+        border: 1px solid rgba(143, 104, 90, 0.16);
+        border-radius: 14px;
+        overflow: hidden;
+        box-shadow: var(--care-shadow-soft);
     }
 
     /* Tab spacing */
     button[data-baseweb="tab"] {
+        color: var(--care-muted);
         font-weight: 650;
     }
 
-    /* Primary button */
-    div[data-testid="stFormSubmitButton"] button {
-        border-radius: 12px;
-        min-height: 3rem;
-        font-weight: 700;
+    button[data-baseweb="tab"][aria-selected="true"] {
+        color: var(--care-rose-dark);
     }
 
-    /* Metric cards */
-    div[data-testid="stMetric"] {
-        border: 1px solid rgba(49, 51, 63, 0.12);
-        border-radius: 14px;
-        padding: 0.85rem 1rem;
-        background: rgba(255, 255, 255, 0.75);
+    /* --------------------------------------------------------
+       Sidebar
+       -------------------------------------------------------- */
+
+    section[data-testid="stSidebar"] {
+        background:
+            linear-gradient(
+                180deg,
+                #f7eadf 0%,
+                #f4eee7 52%,
+                #edf2e9 100%
+            );
+        border-right: 1px solid rgba(143, 104, 90, 0.18);
     }
 
-    /* Floating chat launcher container */
+    section[data-testid="stSidebar"] > div {
+        padding-top: 1.4rem;
+    }
+
+    section[data-testid="stSidebar"] h1,
+    section[data-testid="stSidebar"] h2,
+    section[data-testid="stSidebar"] h3 {
+        color: #684b42;
+    }
+
+    section[data-testid="stSidebar"] p,
+    section[data-testid="stSidebar"] span {
+        color: #755f57;
+    }
+
+    /* --------------------------------------------------------
+       Floating chat
+       -------------------------------------------------------- */
+
     .st-key-floating_chat_launcher {
         position: fixed;
         right: 24px;
         bottom: 24px;
         z-index: 999999;
         width: auto;
+        animation: floatingChatButton 3.2s ease-in-out infinite;
     }
 
     @keyframes floatingChatButton {
+        0% {
+            transform: translateY(0);
+        }
 
-    0% {
-        transform: translateY(0);
+        50% {
+            transform: translateY(-7px);
+        }
+
+        100% {
+            transform: translateY(0);
+        }
     }
 
-    50% {
-        transform: translateY(-8px);
-    }
-
-    100% {
-        transform: translateY(0);
-    }
-}
-
-.st-key-floating_chat_launcher {
-    animation: floatingChatButton 3s ease-in-out infinite;
-}
-
-    /* Circular chat button */
     .st-key-floating_chat_launcher
     button[data-testid="stPopoverButton"] {
-        width: 58px;
-        height: 58px;
-        min-width: 58px;
-        border-radius: 50%;
+        width: 60px;
+        height: 60px;
+        min-width: 60px;
+        border: 1px solid rgba(255, 255, 255, 0.55);
+        border-radius: 50% !important;
         padding: 0;
+        background:
+            linear-gradient(
+                145deg,
+                #d98f83,
+                #b96e64
+            ) !important;
+        color: #ffffff !important;
         font-size: 1.55rem;
-        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
-        border: 1px solid rgba(255, 255, 255, 0.35);
+        box-shadow: 0 10px 28px rgba(121, 76, 66, 0.30);
     }
 
-    /* Popover width */
+    .st-key-floating_chat_launcher
+    button[data-testid="stPopoverButton"]:hover {
+        box-shadow: 0 13px 32px rgba(121, 76, 66, 0.36);
+        transform: scale(1.03);
+    }
+
+    /* Popover */
     div[data-baseweb="popover"] {
-        max-width: min(410px, calc(100vw - 32px));
+        max-width: min(420px, calc(100vw - 32px));
+    }
+
+    div[data-baseweb="popover"] > div {
+        border: 1px solid var(--care-border);
+        border-radius: 18px;
+        background: #fffaf4;
+        box-shadow: 0 18px 50px rgba(90, 62, 52, 0.20);
     }
 
     /* Chat message cards */
     .mini-chat-user {
-        padding: 0.65rem 0.75rem;
-        border-radius: 12px 12px 4px 12px;
-        margin: 0.4rem 0 0.4rem 2rem;
-        background: rgba(37, 99, 235, 0.12);
+        padding: 0.7rem 0.8rem;
+        border: 1px solid rgba(169, 95, 87, 0.16);
+        border-radius: 14px 14px 4px 14px;
+        margin: 0.45rem 0 0.45rem 2rem;
+        background: rgba(247, 223, 210, 0.72);
+        color: #65483f;
     }
 
     .mini-chat-assistant {
-        padding: 0.65rem 0.75rem;
-        border-radius: 12px 12px 12px 4px;
-        margin: 0.4rem 2rem 0.4rem 0;
-        background: rgba(100, 116, 139, 0.12);
+        padding: 0.7rem 0.8rem;
+        border: 1px solid rgba(102, 122, 98, 0.14);
+        border-radius: 14px 14px 14px 4px;
+        margin: 0.45rem 2rem 0.45rem 0;
+        background: rgba(218, 229, 210, 0.72);
+        color: #53624f;
     }
 
-    /* Mobile spacing */
+    /* --------------------------------------------------------
+       Scrollbars
+       -------------------------------------------------------- */
+
+    ::-webkit-scrollbar {
+        width: 10px;
+        height: 10px;
+    }
+
+    ::-webkit-scrollbar-track {
+        background: rgba(247, 234, 223, 0.55);
+    }
+
+    ::-webkit-scrollbar-thumb {
+        border: 2px solid rgba(247, 234, 223, 0.70);
+        border-radius: 999px;
+        background: rgba(185, 112, 103, 0.58);
+    }
+
+    /* --------------------------------------------------------
+       Mobile responsiveness
+       -------------------------------------------------------- */
+
     @media (max-width: 700px) {
         .block-container {
             padding-left: 0.85rem;
             padding-right: 0.85rem;
+            padding-top: 1.05rem;
+        }
+
+        .app-hero {
+            padding: 1.25rem 1.15rem;
+            border-radius: 19px;
         }
 
         .app-hero h1 {
-            font-size: 1.55rem;
+            font-size: 1.58rem;
+        }
+
+        .app-hero::after {
+            right: 0.65rem;
+            font-size: 4.2rem;
+        }
+
+        .info-card {
+            min-height: auto;
+        }
+
+        div[data-testid="stForm"] {
+            padding: 1rem 0.9rem 1.15rem 0.9rem;
         }
 
         .st-key-floating_chat_launcher {
             right: 16px;
             bottom: 16px;
+        }
+    }
+
+    /* Respect reduced-motion preferences */
+    @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+            animation-duration: 0.01ms !important;
+            animation-iteration-count: 1 !important;
+            transition-duration: 0.01ms !important;
         }
     }
     </style>
