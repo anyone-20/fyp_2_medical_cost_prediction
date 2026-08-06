@@ -385,7 +385,26 @@ div[data-testid="stFormSubmitButton"] button div {
    /* ============================================================
    Floating Ask AI button
    ============================================================ */
+/* Make the Ask AI button text larger */
 
+.st-key-floating_chat_launcher
+button[data-testid="stPopoverButton"] {
+
+    font-size: 1.35rem !important;
+    font-weight: 800 !important;
+}
+
+.st-key-floating_chat_launcher
+button[data-testid="stPopoverButton"] span,
+.st-key-floating_chat_launcher
+button[data-testid="stPopoverButton"] p,
+.st-key-floating_chat_launcher
+button[data-testid="stPopoverButton"] div {
+
+    font-size: 1.35rem !important;
+    font-weight: 800 !important;
+    color: white !important;
+}
 .st-key-floating_chat_launcher
 button[data-testid="stPopoverButton"] {
 
