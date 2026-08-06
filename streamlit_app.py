@@ -240,6 +240,17 @@ st.markdown(
         box-shadow 150ms ease,
         filter 150ms ease;
 }
+
+/* Force button text to white */
+
+div[data-testid="stFormSubmitButton"] button,
+div[data-testid="stFormSubmitButton"] button span,
+div[data-testid="stFormSubmitButton"] button p,
+div[data-testid="stFormSubmitButton"] button div {
+    color: #ffffff !important;
+    font-weight: 800 !important;
+}
+
         box-shadow: 0 8px 20px rgba(52, 120, 183, 0.20);
         transition:
             transform 150ms ease,
@@ -2331,14 +2342,7 @@ with st.form(
         type="primary",
     )
 
-/* Force button text to white */
 
-div[data-testid="stFormSubmitButton"] button p,
-div[data-testid="stFormSubmitButton"] button span,
-div[data-testid="stFormSubmitButton"] button div {
-    color: #ffffff !important;
-    font-weight: 800 !important;
-}
 
 # ============================================================
 # 19. PROCESS THE PREDICTION
