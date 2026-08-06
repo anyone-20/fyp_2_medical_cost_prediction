@@ -1,7 +1,7 @@
 # ============================================================
 # STREAMLIT MEDICAL COST PREDICTION APPLICATION
 # Latest Gradient Boosting Model:
-# Blended LightGBM + XGBoost with Saved Preprocessor
+# Blended LightGBM + XGBoost with Stored Interaction Rules
 # ============================================================
 
 from __future__ import annotations
@@ -219,9 +219,9 @@ st.markdown(
 BASE_DIR = Path(__file__).resolve().parent
 
 # Place the latest PKL file in the same folder as streamlit_app.py.
-MODEL_PATH = BASE_DIR / "cleaned_2020_GB_2.0.pkl"
+MODEL_PATH = BASE_DIR / "complete_gradient_boosting_pipeline.pkl"
 
-MODEL_VERSION = "Gradient Boosting 2.0 — LightGBM + XGBoost Blend"
+MODEL_VERSION = "Gradient Boosting 2.0 — Interaction LightGBM + XGBoost Blend"
 
 TARGET_NAME = "log_qc701"
 ORIGINAL_TARGET_NAME = "qc701"
@@ -338,20 +338,18 @@ CURRENCY_OPTIONS = {
 @st.cache_resource
 def load_model_artifact(model_path: str) -> dict[str, Any]:
     """
-    Load and validate the latest Gradient Boosting PKL package.
+    Load and validate the latest complete model artifact.
 
-    Supported primary key names:
+    Latest PKL format:
         lightgbm_model
         xgboost_model
-        preprocessor
         lightgbm_weight
         xgboost_weight
-        feature_names
+        original_feature_names
+        interaction_source_features
+        final_feature_names
 
-    Backward-compatible aliases are also accepted:
-        lgb_model
-        xgb_model
-        blend_weight
+    Older aliases are accepted where possible.
     """
 
     path = Path(model_path)
@@ -359,48 +357,61 @@ def load_model_artifact(model_path: str) -> dict[str, Any]:
     if not path.exists():
         raise FileNotFoundError(
             "The trained-model file was not found.\n\n"
-            f"Expected location:\n{path}"
+            f"Expected location:\n{path}\n\n"
+            "Place the latest PKL file in the same folder as "
+            "streamlit_app.py, or update MODEL_PATH."
         )
 
-    artifact = joblib.load(path)
+    raw = joblib.load(path)
 
-    if not isinstance(artifact, dict):
+    if not isinstance(raw, dict):
         raise TypeError(
-            "The PKL file must contain a dictionary model package. "
-            f"Loaded type: {type(artifact).__name__}"
+            "The PKL file must contain a dictionary artifact. "
+            f"Loaded type: {type(raw).__name__}"
         )
 
     # --------------------------------------------------------
-    # Resolve model keys
+    # Resolve model objects and blending weights
     # --------------------------------------------------------
 
-    lgb_model = (
-        artifact.get("lightgbm_model")
-        or artifact.get("lgb_model")
-    )
+    lgb_model = raw.get("lightgbm_model")
+    if lgb_model is None:
+        lgb_model = raw.get("lgb_model")
 
-    xgb_model = (
-        artifact.get("xgboost_model")
-        or artifact.get("xgb_model")
-    )
+    xgb_model = raw.get("xgboost_model")
+    if xgb_model is None:
+        xgb_model = raw.get("xgb_model")
 
-    preprocessor = artifact.get("preprocessor")
-
-    feature_names = artifact.get("feature_names")
-
-    lgb_weight = artifact.get("lightgbm_weight")
-
+    lgb_weight = raw.get("lightgbm_weight")
     if lgb_weight is None:
-        lgb_weight = artifact.get("blend_weight")
+        lgb_weight = raw.get("blend_weight")
 
-    xgb_weight = artifact.get("xgboost_weight")
-
+    xgb_weight = raw.get("xgboost_weight")
     if xgb_weight is None and lgb_weight is not None:
         xgb_weight = 1.0 - float(lgb_weight)
 
     # --------------------------------------------------------
-    # Validate required content
+    # Resolve original and final feature definitions
     # --------------------------------------------------------
+
+    original_feature_names = raw.get("original_feature_names")
+
+    # Compatibility with artifacts that stored only final names.
+    if original_feature_names is None:
+        original_feature_names = raw.get("feature_names")
+
+    final_feature_names = raw.get("final_feature_names")
+    if final_feature_names is None:
+        final_feature_names = raw.get("feature_names")
+
+    interaction_source_features = raw.get(
+        "interaction_source_features",
+        [],
+    )
+
+    # The latest artifact stores a specification dictionary rather
+    # than a fitted sklearn transformer. It is not called directly.
+    preprocessor_spec = raw.get("preprocessor")
 
     missing = []
 
@@ -410,37 +421,47 @@ def load_model_artifact(model_path: str) -> dict[str, Any]:
     if xgb_model is None:
         missing.append("xgboost_model / xgb_model")
 
-    if preprocessor is None:
-        missing.append("preprocessor")
-
-    if feature_names is None:
-        missing.append("feature_names")
-
     if lgb_weight is None:
         missing.append("lightgbm_weight / blend_weight")
+
+    if original_feature_names is None:
+        missing.append("original_feature_names")
+
+    if final_feature_names is None:
+        missing.append("final_feature_names / feature_names")
 
     if missing:
         raise KeyError(
             "The PKL file is missing required components:\n"
             + "\n".join(f"- {item}" for item in missing)
             + "\n\nAvailable keys:\n"
-            + "\n".join(f"- {key}" for key in artifact.keys())
+            + "\n".join(f"- {key}" for key in raw.keys())
         )
 
-    feature_names = [
+    original_feature_names = [
         str(feature).strip()
-        for feature in list(feature_names)
+        for feature in list(original_feature_names)
+    ]
+
+    final_feature_names = [
+        str(feature).strip()
+        for feature in list(final_feature_names)
+    ]
+
+    interaction_source_features = [
+        str(feature).strip()
+        for feature in list(interaction_source_features)
     ]
 
     lgb_weight = float(lgb_weight)
     xgb_weight = float(xgb_weight)
 
-    if not 0 <= lgb_weight <= 1:
+    if not 0.0 <= lgb_weight <= 1.0:
         raise ValueError(
             f"Invalid LightGBM blend weight: {lgb_weight}"
         )
 
-    if not 0 <= xgb_weight <= 1:
+    if not 0.0 <= xgb_weight <= 1.0:
         raise ValueError(
             f"Invalid XGBoost blend weight: {xgb_weight}"
         )
@@ -454,24 +475,52 @@ def load_model_artifact(model_path: str) -> dict[str, Any]:
             "The LightGBM and XGBoost weights do not add up to 1."
         )
 
+    # Validate the model input sizes against the stored final matrix.
+    expected_count = len(final_feature_names)
+
+    lgb_count = getattr(lgb_model, "n_features_in_", None)
+    xgb_count = getattr(xgb_model, "n_features_in_", None)
+
+    if lgb_count is not None and int(lgb_count) != expected_count:
+        raise ValueError(
+            "LightGBM feature-count mismatch in the saved artifact.\n"
+            f"Model expects: {int(lgb_count)}\n"
+            f"Stored final features: {expected_count}"
+        )
+
+    if xgb_count is not None and int(xgb_count) != expected_count:
+        raise ValueError(
+            "XGBoost feature-count mismatch in the saved artifact.\n"
+            f"Model expects: {int(xgb_count)}\n"
+            f"Stored final features: {expected_count}"
+        )
+
     return {
-        "raw_artifact": artifact,
+        "raw_artifact": raw,
         "lgb_model": lgb_model,
         "xgb_model": xgb_model,
-        "preprocessor": preprocessor,
-        "feature_names": feature_names,
         "lgb_weight": lgb_weight,
         "xgb_weight": xgb_weight,
-        "target_name": artifact.get(
-            "target_name",
-            TARGET_NAME,
+        "original_feature_names": original_feature_names,
+        "interaction_source_features": interaction_source_features,
+        "final_feature_names": final_feature_names,
+        # Compatibility alias used by some UI sections.
+        "feature_names": final_feature_names,
+        "preprocessor_spec": preprocessor_spec,
+        "target_name": raw.get("target_name", TARGET_NAME),
+        "target_transformation": raw.get(
+            "target_transformation",
+            "log1p",
         ),
-        "model_name": artifact.get(
+        "model_name": raw.get(
             "model_type",
             MODEL_VERSION,
         ),
+        "artifact_version": raw.get(
+            "artifact_version",
+            "unknown",
+        ),
     }
-
 
 # ============================================================
 # 8. FEATURE-ENGINEERING HELPERS
@@ -505,8 +554,10 @@ def create_feature_candidates(
     employed_code: int,
 ) -> dict[str, float]:
     """
-    Create all feature candidates that may be required by the
-    latest saved Gradient Boosting model.
+    Create all currently supported ORIGINAL predictor values.
+
+    Interaction variables are not manually requested from the user.
+    They are generated later from the PKL's stored interaction rules.
     """
 
     if height_cm <= 0:
@@ -524,62 +575,33 @@ def create_feature_candidates(
         / ((height_cm / 100.0) ** 2)
     )
 
-    log_previous_cost = safe_log1p(
-        previous_inpatient_cost
-    )
-
-    log_outpatient_cost = safe_log1p(
-        outpatient_cost
-    )
-
     values = {
         "age": float(age),
         "gender": float(gender_code),
         "bmi": bmi,
         "qp401": float(chronic_code),
         "qq201": float(smoking_code),
-        "log_past_qc701": log_previous_cost,
+        "log_past_qc701": safe_log1p(
+            previous_inpatient_cost
+        ),
         "qc401": float(hospitalized_code),
-        "log_qc7b": log_outpatient_cost,
+        "log_qc7b": safe_log1p(
+            outpatient_cost
+        ),
         "qp201": float(health_code),
         "qgb1": float(employed_code),
 
-        # Optional aliases occasionally used in older artifacts.
+        # Compatibility candidates for older model versions.
+        # CFPS weight qp102 is measured in jin, where 1 kg = 2 jin.
         "qp102": float(weight_kg * 2.0),
     }
-
-    # Known interaction features.
-    values["log_qc7b bmi"] = (
-        values["log_qc7b"]
-        * values["bmi"]
-    )
-
-    values["log_qc7b age"] = (
-        values["log_qc7b"]
-        * values["age"]
-    )
-
-    values["qc401 age"] = (
-        values["qc401"]
-        * values["age"]
-    )
-
-    values["qc401 bmi"] = (
-        values["qc401"]
-        * values["bmi"]
-    )
-
-    values["bmi age"] = (
-        values["bmi"]
-        * values["age"]
-    )
 
     return values
 
 
-def create_model_input(
+def create_original_model_input(
     *,
-    required_features: list[str],
+    required_original_features: list[str],
     age: int,
     gender_code: int,
     height_cm: float,
@@ -593,7 +615,8 @@ def create_model_input(
     employed_code: int,
 ) -> pd.DataFrame:
     """
-    Create one model-input row in the exact saved feature order.
+    Create one row containing the exact ORIGINAL predictors stored
+    in the latest PKL artifact.
     """
 
     candidates = create_feature_candidates(
@@ -610,53 +633,134 @@ def create_model_input(
         employed_code=employed_code,
     )
 
-    missing_features = [
+    missing = [
         feature
-        for feature in required_features
+        for feature in required_original_features
         if feature not in candidates
     ]
 
-    if missing_features:
+    if missing:
         raise ValueError(
-            "The application cannot generate all features required "
-            "by the saved PKL file.\n\n"
-            "Unsupported required features:\n"
-            + "\n".join(
-                f"- {feature}"
-                for feature in missing_features
-            )
-            + "\n\nUpdate create_feature_candidates() using the "
-              "same definitions used during model training."
+            "The application cannot create all original predictors "
+            "required by the latest PKL.\n\n"
+            "Unsupported original predictors:\n"
+            + "\n".join(f"- {feature}" for feature in missing)
+            + "\n\nAdd matching user inputs and coding rules to "
+            "create_feature_candidates()."
         )
 
     model_input = pd.DataFrame(
         [
             {
                 feature: candidates[feature]
-                for feature in required_features
+                for feature in required_original_features
             }
         ]
     )
 
     model_input = model_input.loc[
         :,
-        required_features,
-    ]
+        required_original_features,
+    ].apply(pd.to_numeric, errors="coerce")
 
     if model_input.isna().any().any():
+        invalid = model_input.columns[
+            model_input.isna().any()
+        ].tolist()
+
         raise ValueError(
-            "The generated model input contains missing values."
+            "The generated original input contains invalid values:\n"
+            + "\n".join(f"- {feature}" for feature in invalid)
         )
 
     if np.isinf(
         model_input.to_numpy(dtype=float)
     ).any():
         raise ValueError(
-            "The generated model input contains infinite values."
+            "The generated original input contains infinite values."
         )
 
     return model_input
 
+
+def create_engineered_model_input(
+    *,
+    original_input: pd.DataFrame,
+    interaction_source_features: list[str],
+    final_feature_names: list[str],
+) -> pd.DataFrame:
+    """
+    Recreate pairwise interaction features exactly as specified by
+    the latest saved artifact, then enforce the final feature order.
+    """
+
+    engineered = original_input.copy()
+
+    missing_sources = [
+        feature
+        for feature in interaction_source_features
+        if feature not in engineered.columns
+    ]
+
+    if missing_sources:
+        raise KeyError(
+            "Interaction source variables are missing from the "
+            "original input:\n"
+            + "\n".join(f"- {feature}" for feature in missing_sources)
+        )
+
+    for left_index in range(
+        len(interaction_source_features)
+    ):
+        for right_index in range(
+            left_index + 1,
+            len(interaction_source_features)
+        ):
+            left = interaction_source_features[left_index]
+            right = interaction_source_features[right_index]
+            interaction_name = f"{left} {right}"
+
+            engineered[interaction_name] = (
+                engineered[left]
+                * engineered[right]
+            )
+
+    missing_final = [
+        feature
+        for feature in final_feature_names
+        if feature not in engineered.columns
+    ]
+
+    if missing_final:
+        raise KeyError(
+            "The application could not recreate all final model "
+            "features required by the PKL:\n"
+            + "\n".join(f"- {feature}" for feature in missing_final)
+        )
+
+    engineered = engineered.loc[
+        :,
+        final_feature_names,
+    ].apply(pd.to_numeric, errors="coerce")
+
+    if engineered.isna().any().any():
+        invalid = engineered.columns[
+            engineered.isna().any()
+        ].tolist()
+
+        raise ValueError(
+            "The engineered model input contains invalid values:\n"
+            + "\n".join(f"- {feature}" for feature in invalid)
+        )
+
+    if np.isinf(
+        engineered.to_numpy(dtype=float)
+    ).any():
+        raise ValueError(
+            "The engineered model input contains infinite values."
+        )
+
+    return engineered
 
 # ============================================================
 # 9. PREDICTION SERVICE
@@ -665,25 +769,23 @@ def create_model_input(
 def predict_medical_cost(
     *,
     artifact: dict[str, Any],
-    model_input: pd.DataFrame,
+    original_input: pd.DataFrame,
 ) -> dict[str, Any]:
     """
-    Transform the input using the saved preprocessor and generate
-    blended LightGBM + XGBoost predictions.
+    Recreate the stored interaction features and generate the
+    blended LightGBM + XGBoost prediction.
+
+    No fit(), fit_transform(), or training operation is performed.
     """
 
-    feature_names = artifact["feature_names"]
-
-    ordered_input = model_input.loc[
-        :,
-        feature_names,
-    ].copy()
-
-    # Use transform(), never fit_transform(), on new user data.
-    transformed_input = artifact[
-        "preprocessor"
-    ].transform(
-        ordered_input
+    engineered_input = create_engineered_model_input(
+        original_input=original_input,
+        interaction_source_features=artifact[
+            "interaction_source_features"
+        ],
+        final_feature_names=artifact[
+            "final_feature_names"
+        ],
     )
 
     lgb_model = artifact["lgb_model"]
@@ -694,45 +796,42 @@ def predict_medical_cost(
         "n_features_in_",
         None,
     )
-
     expected_xgb_features = getattr(
         xgb_model,
         "n_features_in_",
         None,
     )
 
-    transformed_feature_count = int(
-        transformed_input.shape[1]
+    produced_count = int(
+        engineered_input.shape[1]
     )
 
     if (
         expected_lgb_features is not None
-        and transformed_feature_count
-        != int(expected_lgb_features)
+        and produced_count != int(expected_lgb_features)
     ):
         raise ValueError(
-            "The saved preprocessor output does not match the "
-            "LightGBM model input size.\n"
-            f"Produced: {transformed_feature_count}\n"
+            "Engineered input does not match the LightGBM "
+            "model input size.\n"
+            f"Produced: {produced_count}\n"
             f"Expected: {expected_lgb_features}"
         )
 
     if (
         expected_xgb_features is not None
-        and transformed_feature_count
-        != int(expected_xgb_features)
+        and produced_count != int(expected_xgb_features)
     ):
         raise ValueError(
-            "The saved preprocessor output does not match the "
-            "XGBoost model input size.\n"
-            f"Produced: {transformed_feature_count}\n"
+            "Engineered input does not match the XGBoost "
+            "model input size.\n"
+            f"Produced: {produced_count}\n"
             f"Expected: {expected_xgb_features}"
         )
 
     lgb_log_prediction = float(
         np.asarray(
             lgb_model.predict(
-                transformed_input
+                engineered_input
             )
         ).reshape(-1)[0]
     )
@@ -740,7 +839,7 @@ def predict_medical_cost(
     xgb_log_prediction = float(
         np.asarray(
             xgb_model.predict(
-                transformed_input
+                engineered_input
             )
         ).reshape(-1)[0]
     )
@@ -766,10 +865,11 @@ def predict_medical_cost(
         "predicted_original_cost": predicted_original_cost,
         "lgb_log_prediction": lgb_log_prediction,
         "xgb_log_prediction": xgb_log_prediction,
-        "model_input": ordered_input,
-        "transformed_input": transformed_input,
+        "original_input": original_input,
+        "engineered_input": engineered_input,
+        # Compatibility alias used by the SHAP section.
+        "transformed_input": engineered_input,
     }
-
 
 # ============================================================
 # 10. SHAP HELPERS
@@ -830,36 +930,26 @@ def extract_shap_vector(
 
 
 def get_transformed_feature_names(
-    preprocessor: Any,
+    artifact: dict[str, Any],
     transformed_count: int,
 ) -> list[str]:
     """
-    Recover transformed feature names when the saved preprocessor
-    supports get_feature_names_out().
+    Return the final engineered feature names stored in the PKL.
     """
 
-    if hasattr(
-        preprocessor,
-        "get_feature_names_out",
-    ):
-        try:
-            names = list(
-                preprocessor.get_feature_names_out()
-            )
+    names = list(
+        artifact["final_feature_names"]
+    )
 
-            if len(names) == transformed_count:
-                return [
-                    str(name)
-                    for name in names
-                ]
+    if len(names) != transformed_count:
+        raise ValueError(
+            "Stored final feature names do not match the SHAP "
+            "vector length.\n"
+            f"Names: {len(names)}\n"
+            f"SHAP values: {transformed_count}"
+        )
 
-        except Exception:
-            pass
-
-    return [
-        f"transformed_feature_{index + 1}"
-        for index in range(transformed_count)
-    ]
+    return names
 
 
 def calculate_top_contributors(
@@ -909,7 +999,7 @@ def calculate_top_contributors(
     )
 
     transformed_names = get_transformed_feature_names(
-        artifact["preprocessor"],
+        artifact,
         len(blended_values),
     )
 
@@ -1347,7 +1437,7 @@ with st.sidebar:
 
     st.write(
         "This research prototype estimates inpatient medical "
-        "cost using a saved preprocessing pipeline and a blended "
+        "cost using stored interaction-feature rules and a blended "
         "LightGBM–XGBoost model."
     )
 
@@ -1363,9 +1453,9 @@ with st.sidebar:
     )
 
     st.write(
-        "**Input features:**",
+        "**Original user inputs:**",
         len(
-            artifact["feature_names"]
+            artifact["original_feature_names"]
         ),
     )
 
@@ -1380,10 +1470,21 @@ with st.sidebar:
     )
 
     with st.expander(
-        "Required feature names"
+        "Original user-input features"
     ):
         for number, feature in enumerate(
-            artifact["feature_names"],
+            artifact["original_feature_names"],
+            start=1,
+        ):
+            st.write(
+                f"{number}. {feature}"
+            )
+
+    with st.expander(
+        "Final engineered model features"
+    ):
+        for number, feature in enumerate(
+            artifact["final_feature_names"],
             start=1,
         ):
             st.write(
@@ -1630,9 +1731,9 @@ if submitted:
             ),
         )
 
-        model_input = create_model_input(
-            required_features=artifact[
-                "feature_names"
+        model_input = create_original_model_input(
+            required_original_features=artifact[
+                "original_feature_names"
             ],
             age=int(age),
             gender_code=GENDER_MAPPING[
@@ -1665,7 +1766,7 @@ if submitted:
 
         prediction_result = predict_medical_cost(
             artifact=artifact,
-            model_input=model_input,
+            original_input=model_input,
         )
 
         predicted_log_cost = float(
@@ -1959,7 +2060,7 @@ if submitted:
 
             st.write(
                 "Required original features:",
-                artifact["feature_names"],
+                artifact["original_feature_names"],
             )
 
             st.write(
@@ -1997,11 +2098,21 @@ if submitted:
             )
 
             st.write(
-                "Generated model input:"
+                "Generated original model input:"
             )
 
             st.dataframe(
                 model_input,
+                use_container_width=True,
+                hide_index=True,
+            )
+
+            st.write(
+                "Generated engineered model input:"
+            )
+
+            st.dataframe(
+                prediction_result["engineered_input"],
                 use_container_width=True,
                 hide_index=True,
             )
@@ -2012,7 +2123,7 @@ if submitted:
                     index=False
                 ),
                 file_name=(
-                    "generated_model_input.csv"
+                    "generated_original_model_input.csv"
                 ),
                 mime="text/csv",
                 use_container_width=True,
