@@ -29,51 +29,39 @@ st.set_page_config(
 
 # ============================================================
 # 1A. USER-INTERFACE STYLING
-# Warm, homely, and caring visual theme
+# Professional light-blue and white theme
 # ============================================================
 
 st.markdown(
     """
     <style>
-    /* --------------------------------------------------------
-       Warm care theme
-       -------------------------------------------------------- */
-
     :root {
-        --care-cream: #fffaf3;
-        --care-ivory: #fffdf9;
-        --care-peach: #f7dfd2;
-        --care-rose: #d98f83;
-        --care-rose-dark: #a95f57;
-        --care-sage: #a8b8a0;
-        --care-sage-dark: #667a62;
-        --care-brown: #5f4a43;
-        --care-muted: #806e67;
-        --care-border: rgba(143, 104, 90, 0.20);
-        --care-shadow: 0 10px 30px rgba(110, 78, 64, 0.10);
-        --care-shadow-soft: 0 5px 18px rgba(110, 78, 64, 0.08);
+        --blue-50: #f5f9ff;
+        --blue-100: #eaf3ff;
+        --blue-200: #d7e8fb;
+        --blue-300: #b9d5f2;
+        --blue-500: #4f8fc9;
+        --blue-600: #3478b7;
+        --blue-700: #245f96;
+        --navy: #173b5e;
+        --text: #2f465c;
+        --muted: #6f8294;
+        --white: #ffffff;
+        --border: rgba(52, 120, 183, 0.17);
+        --shadow: 0 10px 30px rgba(32, 76, 116, 0.09);
+        --shadow-soft: 0 5px 18px rgba(32, 76, 116, 0.07);
     }
 
     /* Main application background */
     .stApp {
         background:
-            radial-gradient(
-                circle at top left,
-                rgba(247, 223, 210, 0.58),
-                transparent 34%
-            ),
-            radial-gradient(
-                circle at top right,
-                rgba(218, 229, 210, 0.52),
-                transparent 31%
-            ),
             linear-gradient(
                 180deg,
-                #fffaf3 0%,
-                #fffdf9 48%,
-                #fff8f0 100%
+                #f7fbff 0%,
+                #ffffff 45%,
+                #f3f8fd 100%
             );
-        color: var(--care-brown);
+        color: var(--text);
     }
 
     /* Main page spacing */
@@ -83,26 +71,26 @@ st.markdown(
         padding-bottom: 5.5rem;
     }
 
-    /* Main text */
+    /* Typography */
     html,
     body,
     [class*="css"] {
-        color: var(--care-brown);
+        color: var(--text);
     }
 
     p,
     label,
     .stMarkdown,
     .stCaption {
-        color: var(--care-brown);
+        color: var(--text);
     }
 
     h1,
     h2,
     h3,
     h4 {
-        color: #65483f;
-        letter-spacing: -0.015em;
+        color: var(--navy);
+        letter-spacing: -0.012em;
     }
 
     /* Hide Streamlit's default footer */
@@ -110,287 +98,243 @@ st.markdown(
         visibility: hidden;
     }
 
-    /* --------------------------------------------------------
-       Hero section
-       -------------------------------------------------------- */
-
+    /* Hero section */
     .app-hero {
-        position: relative;
-        overflow: hidden;
-        padding: 1.65rem 1.7rem;
-        border: 1px solid rgba(169, 95, 87, 0.20);
-        border-radius: 24px;
-        margin-bottom: 1.15rem;
+        padding: 1.55rem 1.65rem;
+        border: 1px solid var(--border);
+        border-radius: 20px;
+        margin-bottom: 1.1rem;
         background:
             linear-gradient(
                 135deg,
-                rgba(255, 246, 236, 0.98),
-                rgba(249, 226, 214, 0.95)
+                rgba(255, 255, 255, 0.98),
+                rgba(234, 243, 255, 0.96)
             );
-        box-shadow: var(--care-shadow);
-    }
-
-    .app-hero::after {
-        content: "♡";
-        position: absolute;
-        right: 1.25rem;
-        top: 0.15rem;
-        font-size: 5.6rem;
-        line-height: 1;
-        color: rgba(169, 95, 87, 0.10);
-        transform: rotate(-8deg);
-        pointer-events: none;
+        box-shadow: var(--shadow);
     }
 
     .app-hero h1 {
-        position: relative;
-        z-index: 1;
         margin: 0;
-        color: #6f4a42;
-        font-size: 2.1rem;
+        color: var(--navy);
+        font-size: 2.05rem;
         line-height: 1.2;
         font-weight: 750;
     }
 
     .app-hero p {
-        position: relative;
-        z-index: 1;
-        margin: 0.65rem 0 0 0;
-        color: #80665e;
+        margin: 0.62rem 0 0 0;
+        color: var(--muted);
         font-size: 1rem;
         line-height: 1.55;
-        max-width: 820px;
+        max-width: 840px;
     }
 
-    /* --------------------------------------------------------
-       Information cards
-       -------------------------------------------------------- */
-
+    /* Information cards */
     .info-card {
-        padding: 1.1rem 1.15rem;
-        border: 1px solid var(--care-border);
-        border-radius: 18px;
-        background: rgba(255, 253, 249, 0.88);
-        min-height: 118px;
-        box-shadow: var(--care-shadow-soft);
+        padding: 1.08rem 1.15rem;
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        background: rgba(255, 255, 255, 0.94);
+        min-height: 116px;
+        box-shadow: var(--shadow-soft);
         transition:
-            transform 180ms ease,
-            box-shadow 180ms ease,
-            border-color 180ms ease;
+            transform 160ms ease,
+            box-shadow 160ms ease,
+            border-color 160ms ease;
     }
 
     .info-card:hover {
         transform: translateY(-2px);
-        box-shadow: 0 10px 24px rgba(110, 78, 64, 0.12);
-        border-color: rgba(169, 95, 87, 0.30);
+        box-shadow: 0 10px 24px rgba(32, 76, 116, 0.11);
+        border-color: rgba(52, 120, 183, 0.28);
     }
 
     .info-card-title {
-        color: var(--care-rose-dark);
+        color: var(--blue-700);
         font-size: 0.76rem;
         font-weight: 750;
         text-transform: uppercase;
-        letter-spacing: 0.07em;
+        letter-spacing: 0.065em;
         margin-bottom: 0.38rem;
     }
 
     .info-card-value {
-        color: #65483f;
-        font-size: 1.08rem;
+        color: var(--navy);
+        font-size: 1.06rem;
         font-weight: 750;
-        margin-bottom: 0.25rem;
+        margin-bottom: 0.24rem;
     }
 
     .info-card-text {
-        color: var(--care-muted);
+        color: var(--muted);
         font-size: 0.89rem;
         line-height: 1.45;
     }
 
-    /* --------------------------------------------------------
-       Forms and input controls
-       -------------------------------------------------------- */
-
+    /* Forms and input controls */
     div[data-testid="stForm"] {
-        border: 1px solid var(--care-border);
-        border-radius: 22px;
-        padding: 1.3rem 1.35rem 1.4rem 1.35rem;
-        background: rgba(255, 253, 249, 0.90);
-        box-shadow: var(--care-shadow);
+        border: 1px solid var(--border);
+        border-radius: 20px;
+        padding: 1.25rem 1.3rem 1.35rem 1.3rem;
+        background: rgba(255, 255, 255, 0.96);
+        box-shadow: var(--shadow);
     }
 
     div[data-baseweb="input"] > div,
     div[data-baseweb="select"] > div,
     div[data-baseweb="base-input"] {
-        border-radius: 12px !important;
-        border-color: rgba(143, 104, 90, 0.24) !important;
-        background: rgba(255, 255, 255, 0.92) !important;
+        border-radius: 10px !important;
+        border-color: rgba(52, 120, 183, 0.20) !important;
+        background: var(--white) !important;
     }
 
     div[data-baseweb="input"] > div:focus-within,
     div[data-baseweb="select"] > div:focus-within {
-        border-color: var(--care-rose) !important;
-        box-shadow: 0 0 0 2px rgba(217, 143, 131, 0.16) !important;
+        border-color: var(--blue-500) !important;
+        box-shadow: 0 0 0 2px rgba(79, 143, 201, 0.14) !important;
     }
 
     input,
     textarea {
-        color: var(--care-brown) !important;
+        color: var(--text) !important;
     }
 
-    /* Section dividers */
     hr {
-        border-color: rgba(143, 104, 90, 0.16) !important;
+        border-color: rgba(52, 120, 183, 0.13) !important;
     }
 
-    /* Informational messages */
+    /* Alerts */
     div[data-testid="stAlert"] {
-        border-radius: 15px;
-        border: 1px solid rgba(143, 104, 90, 0.16);
-        box-shadow: var(--care-shadow-soft);
+        border-radius: 13px;
+        border: 1px solid rgba(52, 120, 183, 0.14);
+        box-shadow: var(--shadow-soft);
     }
 
-    /* --------------------------------------------------------
-       Buttons
-       -------------------------------------------------------- */
-
+    /* Buttons */
     button {
-        border-radius: 12px !important;
+        border-radius: 10px !important;
     }
 
     div[data-testid="stFormSubmitButton"] button {
-        min-height: 3.15rem;
-        border: 1px solid #b96f64;
-        border-radius: 14px !important;
+        min-height: 3.1rem;
+        border: 1px solid var(--blue-600);
+        border-radius: 12px !important;
         background:
             linear-gradient(
                 135deg,
-                #d98f83,
-                #bd7067
+                #4f8fc9,
+                #3478b7
             ) !important;
         color: #ffffff !important;
         font-weight: 750;
-        box-shadow: 0 8px 20px rgba(169, 95, 87, 0.22);
+        box-shadow: 0 8px 20px rgba(52, 120, 183, 0.20);
         transition:
-            transform 160ms ease,
-            box-shadow 160ms ease,
-            filter 160ms ease;
+            transform 150ms ease,
+            box-shadow 150ms ease,
+            filter 150ms ease;
     }
 
     div[data-testid="stFormSubmitButton"] button:hover {
         transform: translateY(-1px);
-        box-shadow: 0 11px 24px rgba(169, 95, 87, 0.28);
+        box-shadow: 0 10px 24px rgba(52, 120, 183, 0.25);
         filter: brightness(1.02);
     }
 
     div[data-testid="stDownloadButton"] button,
     .stButton button {
-        border: 1px solid rgba(169, 95, 87, 0.30);
-        background: rgba(255, 250, 243, 0.95);
-        color: var(--care-rose-dark);
+        border: 1px solid rgba(52, 120, 183, 0.25);
+        background: rgba(255, 255, 255, 0.97);
+        color: var(--blue-700);
         font-weight: 650;
     }
 
     div[data-testid="stDownloadButton"] button:hover,
     .stButton button:hover {
-        border-color: var(--care-rose);
-        background: #fff4ec;
-        color: #8e5049;
+        border-color: var(--blue-500);
+        background: var(--blue-50);
+        color: var(--blue-700);
     }
 
-    /* --------------------------------------------------------
-       Metrics and result cards
-       -------------------------------------------------------- */
-
+    /* Metrics */
     div[data-testid="stMetric"] {
-        border: 1px solid var(--care-border);
-        border-radius: 18px;
-        padding: 1rem 1.1rem;
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 0.95rem 1.05rem;
         background:
             linear-gradient(
                 145deg,
-                rgba(255, 253, 249, 0.96),
-                rgba(255, 244, 235, 0.93)
+                rgba(255, 255, 255, 0.98),
+                rgba(234, 243, 255, 0.92)
             );
-        box-shadow: var(--care-shadow-soft);
+        box-shadow: var(--shadow-soft);
     }
 
     div[data-testid="stMetricLabel"] {
-        color: var(--care-muted);
+        color: var(--muted);
     }
 
     div[data-testid="stMetricValue"] {
-        color: #6e4b43;
+        color: var(--navy);
     }
 
-    /* --------------------------------------------------------
-       Expanders, tables, and charts
-       -------------------------------------------------------- */
-
+    /* Expanders, tables, and tabs */
     div[data-testid="stExpander"] {
-        border: 1px solid var(--care-border);
-        border-radius: 15px;
+        border: 1px solid var(--border);
+        border-radius: 14px;
         overflow: hidden;
-        background: rgba(255, 253, 249, 0.82);
-        box-shadow: var(--care-shadow-soft);
+        background: rgba(255, 255, 255, 0.90);
+        box-shadow: var(--shadow-soft);
     }
 
     div[data-testid="stExpander"] details summary {
-        color: #6f4a42;
+        color: var(--navy);
         font-weight: 650;
     }
 
     div[data-testid="stDataFrame"] {
-        border: 1px solid rgba(143, 104, 90, 0.16);
-        border-radius: 14px;
+        border: 1px solid rgba(52, 120, 183, 0.14);
+        border-radius: 12px;
         overflow: hidden;
-        box-shadow: var(--care-shadow-soft);
+        box-shadow: var(--shadow-soft);
     }
 
-    /* Tab spacing */
     button[data-baseweb="tab"] {
-        color: var(--care-muted);
+        color: var(--muted);
         font-weight: 650;
     }
 
     button[data-baseweb="tab"][aria-selected="true"] {
-        color: var(--care-rose-dark);
+        color: var(--blue-700);
     }
 
-    /* --------------------------------------------------------
-       Sidebar
-       -------------------------------------------------------- */
-
+    /* Sidebar */
     section[data-testid="stSidebar"] {
         background:
             linear-gradient(
                 180deg,
-                #f7eadf 0%,
-                #f4eee7 52%,
-                #edf2e9 100%
+                #eef6ff 0%,
+                #f7fbff 55%,
+                #ffffff 100%
             );
-        border-right: 1px solid rgba(143, 104, 90, 0.18);
+        border-right: 1px solid rgba(52, 120, 183, 0.14);
     }
 
     section[data-testid="stSidebar"] > div {
-        padding-top: 1.4rem;
+        padding-top: 1.35rem;
     }
 
     section[data-testid="stSidebar"] h1,
     section[data-testid="stSidebar"] h2,
     section[data-testid="stSidebar"] h3 {
-        color: #684b42;
+        color: var(--navy);
     }
 
     section[data-testid="stSidebar"] p,
     section[data-testid="stSidebar"] span {
-        color: #755f57;
+        color: #5f7488;
     }
 
-    /* --------------------------------------------------------
-       Floating chat
-       -------------------------------------------------------- */
-
+    /* Floating chat */
     .st-key-floating_chat_launcher {
         position: fixed;
         right: 24px;
@@ -406,7 +350,7 @@ st.markdown(
         }
 
         50% {
-            transform: translateY(-7px);
+            transform: translateY(-6px);
         }
 
         100% {
@@ -416,26 +360,26 @@ st.markdown(
 
     .st-key-floating_chat_launcher
     button[data-testid="stPopoverButton"] {
-        width: 60px;
-        height: 60px;
-        min-width: 60px;
-        border: 1px solid rgba(255, 255, 255, 0.55);
+        width: 58px;
+        height: 58px;
+        min-width: 58px;
+        border: 1px solid rgba(255, 255, 255, 0.65);
         border-radius: 50% !important;
         padding: 0;
         background:
             linear-gradient(
                 145deg,
-                #d98f83,
-                #b96e64
+                #4f8fc9,
+                #3478b7
             ) !important;
         color: #ffffff !important;
-        font-size: 1.55rem;
-        box-shadow: 0 10px 28px rgba(121, 76, 66, 0.30);
+        font-size: 1.45rem;
+        box-shadow: 0 10px 26px rgba(32, 76, 116, 0.26);
     }
 
     .st-key-floating_chat_launcher
     button[data-testid="stPopoverButton"]:hover {
-        box-shadow: 0 13px 32px rgba(121, 76, 66, 0.36);
+        box-shadow: 0 13px 30px rgba(32, 76, 116, 0.32);
         transform: scale(1.03);
     }
 
@@ -445,54 +389,48 @@ st.markdown(
     }
 
     div[data-baseweb="popover"] > div {
-        border: 1px solid var(--care-border);
-        border-radius: 18px;
-        background: #fffaf4;
-        box-shadow: 0 18px 50px rgba(90, 62, 52, 0.20);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        background: #ffffff;
+        box-shadow: 0 18px 48px rgba(32, 76, 116, 0.18);
     }
 
     /* Chat message cards */
     .mini-chat-user {
-        padding: 0.7rem 0.8rem;
-        border: 1px solid rgba(169, 95, 87, 0.16);
-        border-radius: 14px 14px 4px 14px;
-        margin: 0.45rem 0 0.45rem 2rem;
-        background: rgba(247, 223, 210, 0.72);
-        color: #65483f;
+        padding: 0.68rem 0.78rem;
+        border: 1px solid rgba(52, 120, 183, 0.14);
+        border-radius: 13px 13px 4px 13px;
+        margin: 0.42rem 0 0.42rem 2rem;
+        background: rgba(215, 232, 251, 0.72);
+        color: var(--navy);
     }
 
     .mini-chat-assistant {
-        padding: 0.7rem 0.8rem;
-        border: 1px solid rgba(102, 122, 98, 0.14);
-        border-radius: 14px 14px 14px 4px;
-        margin: 0.45rem 2rem 0.45rem 0;
-        background: rgba(218, 229, 210, 0.72);
-        color: #53624f;
+        padding: 0.68rem 0.78rem;
+        border: 1px solid rgba(52, 120, 183, 0.10);
+        border-radius: 13px 13px 13px 4px;
+        margin: 0.42rem 2rem 0.42rem 0;
+        background: rgba(245, 249, 255, 0.96);
+        color: var(--text);
     }
 
-    /* --------------------------------------------------------
-       Scrollbars
-       -------------------------------------------------------- */
-
+    /* Scrollbars */
     ::-webkit-scrollbar {
         width: 10px;
         height: 10px;
     }
 
     ::-webkit-scrollbar-track {
-        background: rgba(247, 234, 223, 0.55);
+        background: rgba(234, 243, 255, 0.60);
     }
 
     ::-webkit-scrollbar-thumb {
-        border: 2px solid rgba(247, 234, 223, 0.70);
+        border: 2px solid rgba(234, 243, 255, 0.72);
         border-radius: 999px;
-        background: rgba(185, 112, 103, 0.58);
+        background: rgba(79, 143, 201, 0.50);
     }
 
-    /* --------------------------------------------------------
-       Mobile responsiveness
-       -------------------------------------------------------- */
-
+    /* Mobile responsiveness */
     @media (max-width: 700px) {
         .block-container {
             padding-left: 0.85rem;
@@ -501,17 +439,12 @@ st.markdown(
         }
 
         .app-hero {
-            padding: 1.25rem 1.15rem;
-            border-radius: 19px;
+            padding: 1.2rem 1.1rem;
+            border-radius: 17px;
         }
 
         .app-hero h1 {
             font-size: 1.58rem;
-        }
-
-        .app-hero::after {
-            right: 0.65rem;
-            font-size: 4.2rem;
         }
 
         .info-card {
@@ -519,7 +452,7 @@ st.markdown(
         }
 
         div[data-testid="stForm"] {
-            padding: 1rem 0.9rem 1.15rem 0.9rem;
+            padding: 1rem 0.9rem 1.1rem 0.9rem;
         }
 
         .st-key-floating_chat_launcher {
@@ -528,7 +461,6 @@ st.markdown(
         }
     }
 
-    /* Respect reduced-motion preferences */
     @media (prefers-reduced-motion: reduce) {
         *,
         *::before,
