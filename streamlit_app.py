@@ -142,22 +142,27 @@ st.markdown(
         box-shadow: var(--app-shadow);
     }
 
-    div[data-baseweb="input"] > div,
-    div[data-baseweb="select"] > div,
-    div[data-baseweb="base-input"],
-    div[data-baseweb="textarea"] > div {
-        border-radius: 10px !important;
-        border-color: var(--app-border) !important;
-        background: var(--app-surface) !important;
-        color: var(--app-text) !important;
-    }
+   /* ===============================
+   Input fields
+   =============================== */
 
-    div[data-baseweb="input"] > div:focus-within,
-    div[data-baseweb="select"] > div:focus-within,
-    div[data-baseweb="textarea"] > div:focus-within {
-        border-color: var(--app-primary) !important;
-        box-shadow: 0 0 0 2px color-mix(in srgb, var(--app-primary) 18%, transparent) !important;
-    }
+div[data-baseweb="input"] > div,
+div[data-baseweb="base-input"],
+div[data-baseweb="select"] > div {
+    background: white !important;
+    border: 1px solid #d7e8fb !important;
+    border-radius: 10px !important;
+}
+
+div[data-baseweb="input"] input,
+div[data-baseweb="base-input"] input {
+    background: transparent !important;
+    color: #173b5e !important;
+}
+
+div[data-baseweb="select"] span {
+    color: #173b5e !important;
+}
 
     input, textarea {
         color: var(--app-text) !important;
