@@ -596,6 +596,20 @@ def create_feature_candidates(
         "qp102": float(weight_kg * 2.0),
     }
 
+    # One-hot encoded self-rated-health features.
+    # HEALTH_MAPPING uses:
+    # 1 = Excellent (reference category)
+    # 2 = Very good
+    # 3 = Good
+    # 4 = Fair
+    # 5 = Poor
+    #
+    # Excellent is represented by all four dummy columns being 0.
+    values["health_very_good"] = float(int(health_code == 2))
+    values["health_good"] = float(int(health_code == 3))
+    values["health_fair"] = float(int(health_code == 4))
+    values["health_poor"] = float(int(health_code == 5))
+
     return values
 
 
