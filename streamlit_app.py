@@ -382,24 +382,52 @@ div[data-testid="stFormSubmitButton"] button div {
         }
     }
 
-    .st-key-floating_chat_launcher
-    button[data-testid="stPopoverButton"] {
-        width: 58px;
-        height: 58px;
-        min-width: 58px;
-        border: 1px solid rgba(255, 255, 255, 0.65);
-        border-radius: 50% !important;
-        padding: 0;
-        background:
-            linear-gradient(
-                145deg,
-                #4f8fc9,
-                #3478b7
-            ) !important;
-        color: #ffffff !important;
-        font-size: 1.45rem;
-        box-shadow: 0 10px 26px rgba(32, 76, 116, 0.26);
-    }
+   /* ============================================================
+   Floating Ask AI button
+   ============================================================ */
+
+.st-key-floating_chat_launcher
+button[data-testid="stPopoverButton"] {
+
+    width: 82px;
+    height: 82px;
+    min-width: 82px;
+
+    border-radius: 50% !important;
+
+    border: 2px solid rgba(255,255,255,.95);
+
+    background: linear-gradient(
+        135deg,
+        #7fc8ff,
+        #58b5ff
+    ) !important;
+
+    color: white !important;
+
+    font-size: 2rem !important;
+    font-weight: 700;
+
+    box-shadow:
+        0 10px 30px rgba(0,115,230,.28);
+
+    transition: all .25s ease;
+}
+
+.st-key-floating_chat_launcher
+button[data-testid="stPopoverButton"]:hover{
+
+    background: linear-gradient(
+        135deg,
+        #96d5ff,
+        #66bfff
+    ) !important;
+
+    transform: scale(1.08);
+
+    box-shadow:
+        0 14px 36px rgba(0,115,230,.35);
+}
 
     .st-key-floating_chat_launcher
     button[data-testid="stPopoverButton"]:hover {
