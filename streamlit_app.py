@@ -28,12 +28,178 @@ st.set_page_config(
 
 
 # ============================================================
+# 1A. USER-INTERFACE STYLING
+# ============================================================
+
+st.markdown(
+    """
+    <style>
+    /* Main page spacing */
+    .block-container {
+        max-width: 1120px;
+        padding-top: 1.8rem;
+        padding-bottom: 5.5rem;
+    }
+
+    /* Hide Streamlit's default footer */
+    footer {
+        visibility: hidden;
+    }
+
+    /* Hero section */
+    .app-hero {
+        padding: 1.35rem 1.45rem;
+        border: 1px solid rgba(49, 51, 63, 0.15);
+        border-radius: 18px;
+        margin-bottom: 1rem;
+        background: linear-gradient(
+            135deg,
+            rgba(240, 248, 255, 0.95),
+            rgba(248, 250, 252, 0.95)
+        );
+    }
+
+    .app-hero h1 {
+        margin: 0;
+        font-size: 2rem;
+        line-height: 1.2;
+    }
+
+    .app-hero p {
+        margin: 0.55rem 0 0 0;
+        opacity: 0.8;
+        font-size: 1rem;
+    }
+
+    /* Information cards */
+    .info-card {
+        padding: 1rem 1.1rem;
+        border: 1px solid rgba(49, 51, 63, 0.12);
+        border-radius: 15px;
+        background: rgba(255, 255, 255, 0.75);
+        min-height: 110px;
+    }
+
+    .info-card-title {
+        font-size: 0.78rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        opacity: 0.65;
+        margin-bottom: 0.35rem;
+    }
+
+    .info-card-value {
+        font-size: 1.05rem;
+        font-weight: 700;
+        margin-bottom: 0.2rem;
+    }
+
+    .info-card-text {
+        font-size: 0.88rem;
+        opacity: 0.75;
+        line-height: 1.4;
+    }
+
+    /* Form container */
+    div[data-testid="stForm"] {
+        border: 1px solid rgba(49, 51, 63, 0.13);
+        border-radius: 18px;
+        padding: 1.1rem 1.2rem 1.25rem 1.2rem;
+        background: rgba(255, 255, 255, 0.72);
+    }
+
+    /* Tab spacing */
+    button[data-baseweb="tab"] {
+        font-weight: 650;
+    }
+
+    /* Primary button */
+    div[data-testid="stFormSubmitButton"] button {
+        border-radius: 12px;
+        min-height: 3rem;
+        font-weight: 700;
+    }
+
+    /* Metric cards */
+    div[data-testid="stMetric"] {
+        border: 1px solid rgba(49, 51, 63, 0.12);
+        border-radius: 14px;
+        padding: 0.85rem 1rem;
+        background: rgba(255, 255, 255, 0.75);
+    }
+
+    /* Floating chat launcher container */
+    .st-key-floating_chat_launcher {
+        position: fixed;
+        right: 24px;
+        bottom: 24px;
+        z-index: 999999;
+        width: auto;
+    }
+
+    /* Circular chat button */
+    .st-key-floating_chat_launcher
+    button[data-testid="stPopoverButton"] {
+        width: 58px;
+        height: 58px;
+        min-width: 58px;
+        border-radius: 50%;
+        padding: 0;
+        font-size: 1.55rem;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
+        border: 1px solid rgba(255, 255, 255, 0.35);
+    }
+
+    /* Popover width */
+    div[data-baseweb="popover"] {
+        max-width: min(410px, calc(100vw - 32px));
+    }
+
+    /* Chat message cards */
+    .mini-chat-user {
+        padding: 0.65rem 0.75rem;
+        border-radius: 12px 12px 4px 12px;
+        margin: 0.4rem 0 0.4rem 2rem;
+        background: rgba(37, 99, 235, 0.12);
+    }
+
+    .mini-chat-assistant {
+        padding: 0.65rem 0.75rem;
+        border-radius: 12px 12px 12px 4px;
+        margin: 0.4rem 2rem 0.4rem 0;
+        background: rgba(100, 116, 139, 0.12);
+    }
+
+    /* Mobile spacing */
+    @media (max-width: 700px) {
+        .block-container {
+            padding-left: 0.85rem;
+            padding-right: 0.85rem;
+        }
+
+        .app-hero h1 {
+            font-size: 1.55rem;
+        }
+
+        .st-key-floating_chat_launcher {
+            right: 16px;
+            bottom: 16px;
+        }
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+
+# ============================================================
 # 2. PATHS AND MODEL SETTINGS
 # ============================================================
 
-from pathlib import Path
-
 BASE_DIR = Path(__file__).resolve().parent
+
+# Place the latest PKL file in the same folder as streamlit_app.py.
 MODEL_PATH = BASE_DIR / "cleaned_2020_GB_2.0.pkl"
 
 MODEL_VERSION = "Gradient Boosting 2.0 — LightGBM + XGBoost Blend"
@@ -1081,49 +1247,135 @@ except Exception as error:
 # 16. APPLICATION HEADER
 # ============================================================
 
-st.title(
-    "🏥 Medical Cost Prediction"
+st.markdown(
+    """
+    <div class="app-hero">
+        <h1>🏥 Inpatient Medical Cost Predictor</h1>
+        <p>
+            Enter the individual's information to estimate inpatient
+            medical cost using the latest blended Gradient Boosting model.
+        </p>
+    </div>
+    """,
+    unsafe_allow_html=True,
 )
 
-st.write(
-    "Estimate inpatient medical cost using the latest "
-    "Gradient Boosting model."
+
+overview_col1, overview_col2, overview_col3 = st.columns(
+    3
 )
 
-st.info(
-    "This application uses a blended LightGBM and XGBoost "
-    "regression model. The output is an estimate and should "
-    "not be treated as medical or financial advice."
-)
+with overview_col1:
+    st.markdown(
+        """
+        <div class="info-card">
+            <div class="info-card-title">Model</div>
+            <div class="info-card-value">LightGBM + XGBoost</div>
+            <div class="info-card-text">
+                A weighted Gradient Boosting ensemble trained on
+                historical CFPS survey data.
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+with overview_col2:
+    st.markdown(
+        """
+        <div class="info-card">
+            <div class="info-card-title">Output</div>
+            <div class="info-card-value">Estimated inpatient cost</div>
+            <div class="info-card-text">
+                The model predicts log cost and converts it back to
+                the original CNY cost scale.
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+with overview_col3:
+    st.markdown(
+        """
+        <div class="info-card">
+            <div class="info-card-title">Important</div>
+            <div class="info-card-value">Research estimate only</div>
+            <div class="info-card-text">
+                The result is not a guaranteed medical bill, diagnosis,
+                or financial recommendation.
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
 
 st.caption(
-    f"Model version: {MODEL_VERSION}"
-)
-
-st.caption(
+    f"Model version: {MODEL_VERSION} · "
     f"Saved model: {artifact['model_name']}"
 )
 
 
 # ============================================================
-# 17. MODEL INFORMATION EXPANDER
+# 17. MODEL INFORMATION SIDEBAR
 # ============================================================
 
-with st.expander(
-    "View required model features"
-):
-    st.write(
-        artifact["feature_names"]
+with st.sidebar:
+    st.header(
+        "About this application"
     )
 
     st.write(
-        "LightGBM weight:",
-        artifact["lgb_weight"],
+        "This research prototype estimates inpatient medical "
+        "cost using a saved preprocessing pipeline and a blended "
+        "LightGBM–XGBoost model."
+    )
+
+    st.divider()
+
+    st.subheader(
+        "Model details"
     )
 
     st.write(
-        "XGBoost weight:",
-        artifact["xgb_weight"],
+        "**Model:**",
+        artifact["model_name"],
+    )
+
+    st.write(
+        "**Input features:**",
+        len(
+            artifact["feature_names"]
+        ),
+    )
+
+    st.write(
+        "**LightGBM weight:**",
+        f"{artifact['lgb_weight']:.4f}",
+    )
+
+    st.write(
+        "**XGBoost weight:**",
+        f"{artifact['xgb_weight']:.4f}",
+    )
+
+    with st.expander(
+        "Required feature names"
+    ):
+        for number, feature in enumerate(
+            artifact["feature_names"],
+            start=1,
+        ):
+            st.write(
+                f"{number}. {feature}"
+            )
+
+    st.divider()
+
+    st.caption(
+        "The floating chat button at the bottom-right can explain "
+        "the latest prediction and its model factors."
     )
 
 
@@ -1131,125 +1383,222 @@ with st.expander(
 # 18. USER INPUT FORM
 # ============================================================
 
+st.subheader(
+    "Patient and healthcare information"
+)
+
+st.write(
+    "Complete the three sections below. Fields marked as costs "
+    "should be entered in Chinese yuan (CNY)."
+)
+
+
 with st.form(
     "medical_cost_form"
 ):
-    st.subheader(
-        "Personal information"
+    (
+        personal_tab,
+        health_tab,
+        cost_tab,
+    ) = st.tabs(
+        [
+            "👤 Personal",
+            "🩺 Health",
+            "💰 Costs & output",
+        ]
     )
 
-    age = st.number_input(
-        "Age",
-        min_value=1,
-        max_value=119,
-        value=40,
-        step=1,
-    )
+    with personal_tab:
+        st.markdown(
+            "#### Basic personal details"
+        )
 
-    gender_label = st.selectbox(
-        "Gender",
-        options=list(
-            GENDER_MAPPING.keys()
-        ),
-    )
+        personal_col1, personal_col2 = st.columns(
+            2
+        )
 
-    height_cm = st.number_input(
-        "Height (cm)",
-        min_value=50.0,
-        max_value=250.0,
-        value=165.0,
-        step=0.1,
-    )
+        with personal_col1:
+            age = st.number_input(
+                "Age",
+                min_value=1,
+                max_value=119,
+                value=40,
+                step=1,
+                help=(
+                    "Enter the individual's age in completed years."
+                ),
+            )
 
-    weight_kg = st.number_input(
-        "Weight (kg)",
-        min_value=10.0,
-        max_value=300.0,
-        value=60.0,
-        step=0.1,
-    )
+            gender_label = st.selectbox(
+                "Gender",
+                options=list(
+                    GENDER_MAPPING.keys()
+                ),
+                help=(
+                    "Select the gender category used by the model."
+                ),
+            )
 
-    calculated_bmi = float(
-        weight_kg
-        / ((height_cm / 100.0) ** 2)
-    )
+        with personal_col2:
+            height_cm = st.number_input(
+                "Height (cm)",
+                min_value=50.0,
+                max_value=250.0,
+                value=165.0,
+                step=0.1,
+                help=(
+                    "Height is used together with weight to calculate BMI."
+                ),
+            )
 
-    st.caption(
-        f"Calculated BMI: {calculated_bmi:.2f}"
-    )
+            weight_kg = st.number_input(
+                "Weight (kg)",
+                min_value=10.0,
+                max_value=300.0,
+                value=60.0,
+                step=0.1,
+                help=(
+                    "Weight is used together with height to calculate BMI."
+                ),
+            )
 
-    st.subheader(
-        "Healthcare information"
-    )
+        calculated_bmi = float(
+            weight_kg
+            / ((height_cm / 100.0) ** 2)
+        )
 
-    chronic_illness_label = st.selectbox(
-        "Has the individual been diagnosed with a chronic illness?",
-        options=list(
-            YES_NO_MAPPING.keys()
-        ),
-    )
+        bmi_status = (
+            "Underweight"
+            if calculated_bmi < 18.5
+            else "Normal range"
+            if calculated_bmi < 25
+            else "Overweight"
+            if calculated_bmi < 30
+            else "High BMI"
+        )
 
-    smoking_label = st.selectbox(
-        "Does the individual smoke?",
-        options=list(
-            YES_NO_MAPPING.keys()
-        ),
-    )
+        st.info(
+            f"Calculated BMI: **{calculated_bmi:.2f}** "
+            f"({bmi_status})"
+        )
 
-    hospitalized_label = st.selectbox(
-        "Was the individual hospitalized during the survey period?",
-        options=list(
-            YES_NO_MAPPING.keys()
-        ),
-    )
+    with health_tab:
+        st.markdown(
+            "#### Current healthcare information"
+        )
 
-    outpatient_cost = st.number_input(
-        "Outpatient medical cost (CNY)",
-        min_value=0.0,
-        value=0.0,
-        step=100.0,
-    )
+        health_col1, health_col2 = st.columns(
+            2
+        )
 
-    previous_inpatient_cost = st.number_input(
-        "Previous inpatient medical cost (CNY)",
-        min_value=0.0,
-        value=0.0,
-        step=100.0,
-    )
+        with health_col1:
+            chronic_illness_label = st.selectbox(
+                "Chronic illness diagnosis",
+                options=list(
+                    YES_NO_MAPPING.keys()
+                ),
+                help=(
+                    "Whether the individual has been diagnosed "
+                    "with a chronic illness."
+                ),
+            )
 
-    health_label = st.selectbox(
-        "How would the individual rate their health?",
-        options=list(
-            HEALTH_MAPPING.keys()
-        ),
-        index=2,
-    )
+            smoking_label = st.selectbox(
+                "Smoking status",
+                options=list(
+                    YES_NO_MAPPING.keys()
+                ),
+                help=(
+                    "Whether the individual currently smokes."
+                ),
+            )
 
-    st.subheader(
-        "Employment information"
-    )
+        with health_col2:
+            hospitalized_label = st.selectbox(
+                "Hospitalized during the survey period",
+                options=list(
+                    YES_NO_MAPPING.keys()
+                ),
+                help=(
+                    "Whether the individual was hospitalized "
+                    "during the relevant survey period."
+                ),
+            )
 
-    employed_label = st.selectbox(
-        "Employment status",
-        options=list(
-            EMPLOYMENT_MAPPING.keys()
-        ),
-    )
+            health_label = st.selectbox(
+                "Self-rated health",
+                options=list(
+                    HEALTH_MAPPING.keys()
+                ),
+                index=2,
+                help=(
+                    "Select the individual's own assessment "
+                    "of their current health."
+                ),
+            )
 
-    st.subheader(
-        "Display preference"
-    )
+        employed_label = st.selectbox(
+            "Employment status",
+            options=list(
+                EMPLOYMENT_MAPPING.keys()
+            ),
+            help=(
+                "Select whether the individual is currently employed."
+            ),
+        )
 
-    selected_currency_label = st.selectbox(
-        "Display the predicted cost in",
-        options=list(
-            CURRENCY_OPTIONS.keys()
-        ),
-        index=1,
-    )
+    with cost_tab:
+        st.markdown(
+            "#### Medical-cost history and display preference"
+        )
+
+        cost_col1, cost_col2 = st.columns(
+            2
+        )
+
+        with cost_col1:
+            outpatient_cost = st.number_input(
+                "Current outpatient medical cost (CNY)",
+                min_value=0.0,
+                value=0.0,
+                step=100.0,
+                help=(
+                    "Enter outpatient medical spending for the "
+                    "current survey period."
+                ),
+            )
+
+        with cost_col2:
+            previous_inpatient_cost = st.number_input(
+                "Previous inpatient medical cost (CNY)",
+                min_value=0.0,
+                value=0.0,
+                step=100.0,
+                help=(
+                    "Enter inpatient medical spending from the "
+                    "previous survey period."
+                ),
+            )
+
+        selected_currency_label = st.selectbox(
+            "Display the prediction in",
+            options=list(
+                CURRENCY_OPTIONS.keys()
+            ),
+            index=1,
+            help=(
+                "The model always predicts in CNY. Other currencies "
+                "are approximate display conversions."
+            ),
+        )
+
+        st.warning(
+            "Review all three tabs before submitting. The prediction "
+            "is an estimate derived from historical data."
+        )
 
     submitted = st.form_submit_button(
-        "Predict medical cost",
+        "✨ Predict inpatient medical cost",
         use_container_width=True,
         type="primary",
     )
@@ -1670,126 +2019,190 @@ if submitted:
 
 
 # ============================================================
-# 20. GEMINI CHATBOT
+# 20. FLOATING GEMINI CHATBOT
+# ============================================================
+#
+# Streamlit does not provide a native floating chat widget.
+# The keyed container below is fixed to the bottom-right using
+# CSS, while st.popover provides the expandable chat panel.
 # ============================================================
 
-st.divider()
-
-st.subheader(
-    "💬 Medical Cost Prediction Assistant"
-)
-
-st.caption(
-    "Ask about the estimated cost or the model factors. "
-    "The assistant does not provide diagnosis or treatment advice."
-)
-
-if (
-    st.session_state.latest_prediction_context
-    is None
+with st.container(
+    key="floating_chat_launcher"
 ):
-    st.info(
-        "Generate a prediction first for a personalised explanation."
-    )
-
-else:
-    latest_cost = (
-        st.session_state.latest_prediction_context[
-            "predicted_cost_cny"
-        ]
-    )
-
-    st.success(
-        "Latest prediction available to the assistant: "
-        f"¥{latest_cost:,.2f} CNY"
-    )
-
-if st.button(
-    "Clear chat",
-    key="clear_chat",
-):
-    st.session_state.chat_messages = [
-        {
-            "role": "assistant",
-            "content": (
-                "Chat history cleared. Generate a prediction "
-                "and ask me to explain it."
-            ),
-        }
-    ]
-
-    st.rerun()
-
-for message in st.session_state.chat_messages:
-    with st.chat_message(
-        message["role"]
+    with st.popover(
+        "💬",
+        help=(
+            "Open the Medical Cost Prediction Assistant"
+        ),
     ):
         st.markdown(
-            message["content"]
+            "### Medical Cost Assistant"
         )
 
-user_message = st.chat_input(
-    "Ask why the predicted cost is high or low"
-)
+        st.caption(
+            "Ask about the latest prediction or its model factors. "
+            "The assistant does not provide diagnosis or treatment advice."
+        )
 
-if user_message:
-    st.session_state.chat_messages.append(
-        {
-            "role": "user",
-            "content": user_message,
-        }
-    )
-
-    with st.chat_message("user"):
-        st.markdown(user_message)
-
-    with st.chat_message("assistant"):
         if (
             st.session_state.latest_prediction_context
             is None
         ):
-            assistant_response = (
-                "Please generate a prediction first so I can "
-                "explain the result and its model factors."
-            )
-
-        elif not GEMINI_API_KEY:
-            assistant_response = (
-                "Gemini is unavailable because GEMINI_API_KEY "
-                "is not configured in Streamlit Secrets."
+            st.info(
+                "Generate a prediction first for a personalised explanation."
             )
 
         else:
-            try:
-                with st.spinner(
-                    "Generating explanation..."
-                ):
+            latest_cost = (
+                st.session_state.latest_prediction_context[
+                    "predicted_cost_cny"
+                ]
+            )
+
+            st.success(
+                f"Latest prediction: ¥{latest_cost:,.2f} CNY"
+            )
+
+        chat_history_container = st.container(
+            height=290,
+            border=True,
+        )
+
+        with chat_history_container:
+            for message in (
+                st.session_state.chat_messages
+            ):
+                css_class = (
+                    "mini-chat-user"
+                    if message["role"] == "user"
+                    else "mini-chat-assistant"
+                )
+
+                role_label = (
+                    "You"
+                    if message["role"] == "user"
+                    else "Assistant"
+                )
+
+                st.markdown(
+                    (
+                        f'<div class="{css_class}">'
+                        f"<strong>{role_label}</strong><br>"
+                        f"{message['content']}"
+                        "</div>"
+                    ),
+                    unsafe_allow_html=True,
+                )
+
+        with st.form(
+            "floating_chat_form",
+            clear_on_submit=True,
+        ):
+            chat_question = st.text_input(
+                "Message",
+                placeholder=(
+                    "Ask why the predicted cost is high or low..."
+                ),
+                label_visibility="collapsed",
+            )
+
+            send_chat = st.form_submit_button(
+                "Send",
+                use_container_width=True,
+                type="primary",
+            )
+
+        clear_col, status_col = st.columns(
+            [1, 2]
+        )
+
+        with clear_col:
+            clear_chat = st.button(
+                "Clear",
+                key="clear_floating_chat",
+                use_container_width=True,
+            )
+
+        with status_col:
+            if GEMINI_API_KEY:
+                st.caption(
+                    "🟢 AI assistant ready"
+                )
+            else:
+                st.caption(
+                    "🟠 Gemini API key missing"
+                )
+
+        if clear_chat:
+            st.session_state.chat_messages = [
+                {
+                    "role": "assistant",
+                    "content": (
+                        "Chat history cleared. Generate a prediction "
+                        "and ask me to explain it."
+                    ),
+                }
+            ]
+
+            st.rerun()
+
+        if (
+            send_chat
+            and chat_question.strip()
+        ):
+            clean_question = (
+                chat_question.strip()
+            )
+
+            st.session_state.chat_messages.append(
+                {
+                    "role": "user",
+                    "content": clean_question,
+                }
+            )
+
+            if (
+                st.session_state.latest_prediction_context
+                is None
+            ):
+                assistant_response = (
+                    "Please generate a prediction first so I can "
+                    "explain the result and its model factors."
+                )
+
+            elif not GEMINI_API_KEY:
+                assistant_response = (
+                    "Gemini is unavailable because GEMINI_API_KEY "
+                    "is not configured in Streamlit Secrets."
+                )
+
+            else:
+                try:
                     assistant_response = (
                         generate_gemini_explanation(
                             prediction_context=(
                                 st.session_state
                                 .latest_prediction_context
                             ),
-                            user_message=user_message,
+                            user_message=clean_question,
                         )
                     )
 
-            except Exception as error:
-                assistant_response = (
-                    "The assistant could not generate a response: "
-                    f"{error}"
-                )
+                except Exception as error:
+                    assistant_response = (
+                        "The assistant could not generate a response: "
+                        f"{error}"
+                    )
 
-        st.markdown(
-            assistant_response
-        )
+            st.session_state.chat_messages.append(
+                {
+                    "role": "assistant",
+                    "content": assistant_response,
+                }
+            )
 
-    st.session_state.chat_messages.append(
-        {
-            "role": "assistant",
-            "content": assistant_response,
-        }
-    )
+            st.rerun()
 
 
 # ============================================================
@@ -1799,7 +2212,6 @@ if user_message:
 st.divider()
 
 st.caption(
-    "Research prototype. Predictions are estimates derived from "
-    "historical survey data and may not reflect an individual's "
-    "actual future medical expenses."
+    "Research prototype · Predictions are estimates derived from "
+    "historical CFPS survey data and may differ from actual medical expenses."
 )
