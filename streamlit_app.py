@@ -31,9 +31,9 @@ st.set_page_config(
 # 2. PATHS AND MODEL SETTINGS
 # ============================================================
 
-BASE_DIR = Path(C:\Users\leeji\FYP2\CFPS\ML\2020_2.0\GB\saved_models).resolve().parent
+from pathlib import Path
 
-# Place the latest PKL file in the same folder as streamlit_app.py.
+BASE_DIR = Path(__file__).resolve().parent
 MODEL_PATH = BASE_DIR / "cleaned_2020_GB_2.0.pkl"
 
 MODEL_VERSION = "Gradient Boosting 2.0 — LightGBM + XGBoost Blend"
