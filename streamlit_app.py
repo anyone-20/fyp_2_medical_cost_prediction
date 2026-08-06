@@ -226,28 +226,7 @@ MODEL_VERSION = "Gradient Boosting 2.0 — Interaction LightGBM + XGBoost Blend"
 TARGET_NAME = "log_qc701"
 ORIGINAL_TARGET_NAME = "qc701"
 
-st.sidebar.write(
-    "Current engineered input features:",
-    len(artifact["final_feature_names"])
-)
 
-st.sidebar.write(
-    "LightGBM expects:",
-    getattr(
-        artifact["lgb_model"],
-        "n_features_in_",
-        "Unknown"
-    )
-)
-
-st.sidebar.write(
-    "XGBoost expects:",
-    getattr(
-        artifact["xgb_model"],
-        "n_features_in_",
-        "Unknown"
-    )
-)
 # ============================================================
 # 3. OPTIONAL STREAMLIT SECRETS
 # ============================================================
@@ -997,8 +976,8 @@ def calculate_top_contributors(
     Calculate SHAP contributions only for models that actually
     contribute to the blended prediction.
 
-    This prevents a zero-weight model with a different input shape
-    from causing SHAP errors.
+    This prevents a zero-weight model with a different training
+    feature count from causing SHAP shape errors.
     """
 
     model_input = prediction_result["transformed_input"]
@@ -1008,34 +987,45 @@ def calculate_top_contributors(
     else:
         shap_input = np.asarray(model_input)
 
-    produced_feature_count = int(shap_input.shape[1])
+    produced_feature_count = int(
+        shap_input.shape[1]
+    )
 
     lgb_model = artifact["lgb_model"]
     xgb_model = artifact["xgb_model"]
 
-    lgb_weight = float(artifact["lgb_weight"])
-    xgb_weight = float(artifact["xgb_weight"])
+    lgb_weight = float(
+        artifact["lgb_weight"]
+    )
+    xgb_weight = float(
+        artifact["xgb_weight"]
+    )
 
     final_feature_names = list(
         artifact.get(
             "final_feature_names",
-            artifact.get("feature_names", [])
+            artifact.get(
+                "feature_names",
+                [],
+            ),
         )
     )
 
     weighted_shap_vectors = []
-    used_model_names = []
+    explained_models = []
 
-    # ========================================================
-    # LightGBM SHAP
-    # ========================================================
+    import shap
+
+    # --------------------------------------------------------
+    # Explain LightGBM only when it contributes to the blend
+    # --------------------------------------------------------
 
     if lgb_weight > 1e-12:
 
         expected_lgb_features = getattr(
             lgb_model,
             "n_features_in_",
-            None
+            None,
         )
 
         if (
@@ -1050,8 +1040,6 @@ def calculate_top_contributors(
                 f"LightGBM expects: {expected_lgb_features}"
             )
 
-        import shap
-
         lgb_explainer = shap.TreeExplainer(
             lgb_model
         )
@@ -1064,7 +1052,7 @@ def calculate_top_contributors(
             getattr(
                 lgb_result,
                 "values",
-                lgb_result
+                lgb_result,
             )
         )
 
@@ -1076,7 +1064,7 @@ def calculate_top_contributors(
 
         elif lgb_values.ndim != 1:
             raise ValueError(
-                "Unexpected LightGBM SHAP shape: "
+                "Unexpected LightGBM SHAP output shape: "
                 f"{lgb_values.shape}"
             )
 
@@ -1084,20 +1072,20 @@ def calculate_top_contributors(
             lgb_weight * lgb_values
         )
 
-        used_model_names.append(
+        explained_models.append(
             "LightGBM"
         )
 
-    # ========================================================
-    # XGBoost SHAP
-    # ========================================================
+    # --------------------------------------------------------
+    # Explain XGBoost only when it contributes to the blend
+    # --------------------------------------------------------
 
     if xgb_weight > 1e-12:
 
         expected_xgb_features = getattr(
             xgb_model,
             "n_features_in_",
-            None
+            None,
         )
 
         if (
@@ -1112,8 +1100,6 @@ def calculate_top_contributors(
                 f"XGBoost expects: {expected_xgb_features}"
             )
 
-        import shap
-
         xgb_explainer = shap.TreeExplainer(
             xgb_model
         )
@@ -1126,7 +1112,7 @@ def calculate_top_contributors(
             getattr(
                 xgb_result,
                 "values",
-                xgb_result
+                xgb_result,
             )
         )
 
@@ -1138,7 +1124,7 @@ def calculate_top_contributors(
 
         elif xgb_values.ndim != 1:
             raise ValueError(
-                "Unexpected XGBoost SHAP shape: "
+                "Unexpected XGBoost SHAP output shape: "
                 f"{xgb_values.shape}"
             )
 
@@ -1146,13 +1132,9 @@ def calculate_top_contributors(
             xgb_weight * xgb_values
         )
 
-        used_model_names.append(
+        explained_models.append(
             "XGBoost"
         )
-
-    # ========================================================
-    # Combine active model explanations
-    # ========================================================
 
     if not weighted_shap_vectors:
         raise ValueError(
@@ -1161,23 +1143,24 @@ def calculate_top_contributors(
 
     blended_values = np.sum(
         weighted_shap_vectors,
-        axis=0
+        axis=0,
     )
 
     if len(final_feature_names) != len(
         blended_values
     ):
         raise ValueError(
-            "Stored feature-name count does not match SHAP output.\n"
-            f"Feature names: {len(final_feature_names)}\n"
+            "Stored feature-name count does not match the SHAP "
+            "output length.\n"
+            f"Stored names: {len(final_feature_names)}\n"
             f"SHAP values: {len(blended_values)}\n"
-            f"Models explained: {used_model_names}"
+            f"Explained models: {explained_models}"
         )
 
     contribution_df = pd.DataFrame(
         {
             "Feature": final_feature_names,
-            "SHAP contribution": blended_values
+            "SHAP contribution": blended_values,
         }
     )
 
@@ -1187,23 +1170,28 @@ def calculate_top_contributors(
         "SHAP contribution"
     ].abs()
 
-    contribution_df["Effect"] = np.where(
-        contribution_df["SHAP contribution"] >= 0,
+    contribution_df[
+        "Effect"
+    ] = np.where(
+        contribution_df[
+            "SHAP contribution"
+        ] >= 0,
         "Increased prediction",
-        "Decreased prediction"
+        "Decreased prediction",
     )
 
     contribution_df = (
         contribution_df
         .sort_values(
             "Absolute contribution",
-            ascending=False
+            ascending=False,
         )
         .head(top_n)
         .reset_index(drop=True)
     )
 
     return contribution_df
+
 
 # ============================================================
 # 11. CURRENCY CONVERSION
@@ -1519,6 +1507,32 @@ except Exception as error:
 
 
 # ============================================================
+# 15A. MODEL SHAPE DIAGNOSTICS
+# This must appear only after artifact has been loaded.
+# ============================================================
+
+final_feature_names_for_diagnostics = artifact.get(
+    "final_feature_names",
+    artifact.get(
+        "feature_names",
+        [],
+    ),
+)
+
+lgb_expected_features = getattr(
+    artifact["lgb_model"],
+    "n_features_in_",
+    "Unknown",
+)
+
+xgb_expected_features = getattr(
+    artifact["xgb_model"],
+    "n_features_in_",
+    "Unknown",
+)
+
+
+# ============================================================
 # 16. APPLICATION HEADER
 # ============================================================
 
@@ -1633,6 +1647,28 @@ with st.sidebar:
     st.write(
         "**XGBoost weight:**",
         f"{artifact['xgb_weight']:.4f}",
+    )
+
+
+    st.divider()
+
+    st.subheader(
+        "Model shape diagnostics"
+    )
+
+    st.write(
+        "**Current engineered features:**",
+        len(final_feature_names_for_diagnostics),
+    )
+
+    st.write(
+        "**LightGBM expects:**",
+        lgb_expected_features,
+    )
+
+    st.write(
+        "**XGBoost expects:**",
+        xgb_expected_features,
     )
 
     with st.expander(
