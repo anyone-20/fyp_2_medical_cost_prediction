@@ -2020,7 +2020,7 @@ with st.container(
     key="floating_chat_launcher"
 ):
     with st.popover(
-        "💬",
+        "🤖 Ask AI",
         help=(
             "Open the Medical Cost Prediction Assistant"
         ),
