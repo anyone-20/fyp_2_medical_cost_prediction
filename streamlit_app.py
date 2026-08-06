@@ -1384,218 +1384,207 @@ with st.sidebar:
 # ============================================================
 
 st.subheader(
-    "Patient and healthcare information"
+    "User feature inputs"
 )
 
 st.write(
-    "Complete the three sections below. Fields marked as costs "
-    "should be entered in Chinese yuan (CNY)."
+    "Enter all required personal, health, employment, and "
+    "medical-cost information in the section below."
 )
 
 
 with st.form(
     "medical_cost_form"
 ):
-    (
-        personal_tab,
-        health_tab,
-        cost_tab,
-    ) = st.tabs(
-        [
-            "👤 Personal",
-            "🩺 Health",
-            "💰 Costs & output",
-        ]
+    st.markdown(
+        "#### Personal information"
     )
 
-    with personal_tab:
-        st.markdown(
-            "#### Basic personal details"
+    personal_col1, personal_col2 = st.columns(
+        2
+    )
+
+    with personal_col1:
+        age = st.number_input(
+            "Age",
+            min_value=1,
+            max_value=119,
+            value=40,
+            step=1,
+            help=(
+                "Enter the individual's age in completed years."
+            ),
         )
 
-        personal_col1, personal_col2 = st.columns(
-            2
-        )
-
-        with personal_col1:
-            age = st.number_input(
-                "Age",
-                min_value=1,
-                max_value=119,
-                value=40,
-                step=1,
-                help=(
-                    "Enter the individual's age in completed years."
-                ),
-            )
-
-            gender_label = st.selectbox(
-                "Gender",
-                options=list(
-                    GENDER_MAPPING.keys()
-                ),
-                help=(
-                    "Select the gender category used by the model."
-                ),
-            )
-
-        with personal_col2:
-            height_cm = st.number_input(
-                "Height (cm)",
-                min_value=50.0,
-                max_value=250.0,
-                value=165.0,
-                step=0.1,
-                help=(
-                    "Height is used together with weight to calculate BMI."
-                ),
-            )
-
-            weight_kg = st.number_input(
-                "Weight (kg)",
-                min_value=10.0,
-                max_value=300.0,
-                value=60.0,
-                step=0.1,
-                help=(
-                    "Weight is used together with height to calculate BMI."
-                ),
-            )
-
-        calculated_bmi = float(
-            weight_kg
-            / ((height_cm / 100.0) ** 2)
-        )
-
-        bmi_status = (
-            "Underweight"
-            if calculated_bmi < 18.5
-            else "Normal range"
-            if calculated_bmi < 25
-            else "Overweight"
-            if calculated_bmi < 30
-            else "High BMI"
-        )
-
-        st.info(
-            f"Calculated BMI: **{calculated_bmi:.2f}** "
-            f"({bmi_status})"
-        )
-
-    with health_tab:
-        st.markdown(
-            "#### Current healthcare information"
-        )
-
-        health_col1, health_col2 = st.columns(
-            2
-        )
-
-        with health_col1:
-            chronic_illness_label = st.selectbox(
-                "Chronic illness diagnosis",
-                options=list(
-                    YES_NO_MAPPING.keys()
-                ),
-                help=(
-                    "Whether the individual has been diagnosed "
-                    "with a chronic illness."
-                ),
-            )
-
-            smoking_label = st.selectbox(
-                "Smoking status",
-                options=list(
-                    YES_NO_MAPPING.keys()
-                ),
-                help=(
-                    "Whether the individual currently smokes."
-                ),
-            )
-
-        with health_col2:
-            hospitalized_label = st.selectbox(
-                "Hospitalized during the survey period",
-                options=list(
-                    YES_NO_MAPPING.keys()
-                ),
-                help=(
-                    "Whether the individual was hospitalized "
-                    "during the relevant survey period."
-                ),
-            )
-
-            health_label = st.selectbox(
-                "Self-rated health",
-                options=list(
-                    HEALTH_MAPPING.keys()
-                ),
-                index=2,
-                help=(
-                    "Select the individual's own assessment "
-                    "of their current health."
-                ),
-            )
-
-        employed_label = st.selectbox(
-            "Employment status",
+        gender_label = st.selectbox(
+            "Gender",
             options=list(
-                EMPLOYMENT_MAPPING.keys()
+                GENDER_MAPPING.keys()
             ),
             help=(
-                "Select whether the individual is currently employed."
+                "Select the gender category used by the model."
             ),
         )
 
-    with cost_tab:
-        st.markdown(
-            "#### Medical-cost history and display preference"
-        )
-
-        cost_col1, cost_col2 = st.columns(
-            2
-        )
-
-        with cost_col1:
-            outpatient_cost = st.number_input(
-                "Current outpatient medical cost (CNY)",
-                min_value=0.0,
-                value=0.0,
-                step=100.0,
-                help=(
-                    "Enter outpatient medical spending for the "
-                    "current survey period."
-                ),
-            )
-
-        with cost_col2:
-            previous_inpatient_cost = st.number_input(
-                "Previous inpatient medical cost (CNY)",
-                min_value=0.0,
-                value=0.0,
-                step=100.0,
-                help=(
-                    "Enter inpatient medical spending from the "
-                    "previous survey period."
-                ),
-            )
-
-        selected_currency_label = st.selectbox(
-            "Display the prediction in",
-            options=list(
-                CURRENCY_OPTIONS.keys()
-            ),
-            index=1,
+    with personal_col2:
+        height_cm = st.number_input(
+            "Height (cm)",
+            min_value=50.0,
+            max_value=250.0,
+            value=165.0,
+            step=0.1,
             help=(
-                "The model always predicts in CNY. Other currencies "
-                "are approximate display conversions."
+                "Height is used together with weight to calculate BMI."
             ),
         )
 
-        st.warning(
-            "Review all three tabs before submitting. The prediction "
-            "is an estimate derived from historical data."
+        weight_kg = st.number_input(
+            "Weight (kg)",
+            min_value=10.0,
+            max_value=300.0,
+            value=60.0,
+            step=0.1,
+            help=(
+                "Weight is used together with height to calculate BMI."
+            ),
         )
+
+    calculated_bmi = float(
+        weight_kg
+        / ((height_cm / 100.0) ** 2)
+    )
+
+    bmi_status = (
+        "Underweight"
+        if calculated_bmi < 18.5
+        else "Normal range"
+        if calculated_bmi < 25
+        else "Overweight"
+        if calculated_bmi < 30
+        else "High BMI"
+    )
+
+    st.info(
+        f"Calculated BMI: **{calculated_bmi:.2f}** "
+        f"({bmi_status})"
+    )
+
+    st.divider()
+
+    st.markdown(
+        "#### Health and lifestyle information"
+    )
+
+    health_col1, health_col2 = st.columns(
+        2
+    )
+
+    with health_col1:
+        chronic_illness_label = st.selectbox(
+            "Chronic illness diagnosis",
+            options=list(
+                YES_NO_MAPPING.keys()
+            ),
+            help=(
+                "Whether the individual has been diagnosed "
+                "with a chronic illness."
+            ),
+        )
+
+        smoking_label = st.selectbox(
+            "Smoking status",
+            options=list(
+                YES_NO_MAPPING.keys()
+            ),
+            help=(
+                "Whether the individual currently smokes."
+            ),
+        )
+
+    with health_col2:
+        hospitalized_label = st.selectbox(
+            "Hospitalized during the survey period",
+            options=list(
+                YES_NO_MAPPING.keys()
+            ),
+            help=(
+                "Whether the individual was hospitalized "
+                "during the relevant survey period."
+            ),
+        )
+
+        health_label = st.selectbox(
+            "Self-rated health",
+            options=list(
+                HEALTH_MAPPING.keys()
+            ),
+            index=2,
+            help=(
+                "Select the individual's own assessment "
+                "of their current health."
+            ),
+        )
+
+    employed_label = st.selectbox(
+        "Employment status",
+        options=list(
+            EMPLOYMENT_MAPPING.keys()
+        ),
+        help=(
+            "Select whether the individual is currently employed."
+        ),
+    )
+
+    st.divider()
+
+    st.markdown(
+        "#### Medical-cost information"
+    )
+
+    cost_col1, cost_col2 = st.columns(
+        2
+    )
+
+    with cost_col1:
+        outpatient_cost = st.number_input(
+            "Current outpatient medical cost (CNY)",
+            min_value=0.0,
+            value=0.0,
+            step=100.0,
+            help=(
+                "Enter outpatient medical spending for the "
+                "current survey period."
+            ),
+        )
+
+    with cost_col2:
+        previous_inpatient_cost = st.number_input(
+            "Previous inpatient medical cost (CNY)",
+            min_value=0.0,
+            value=0.0,
+            step=100.0,
+            help=(
+                "Enter inpatient medical spending from the "
+                "previous survey period."
+            ),
+        )
+
+    selected_currency_label = st.selectbox(
+        "Display the prediction in",
+        options=list(
+            CURRENCY_OPTIONS.keys()
+        ),
+        index=1,
+        help=(
+            "The model always predicts in CNY. Other currencies "
+            "are approximate display conversions."
+        ),
+    )
+
+    st.warning(
+        "Review all entered values before submitting. "
+        "The prediction is an estimate derived from historical data."
+    )
 
     submitted = st.form_submit_button(
         "✨ Predict inpatient medical cost",
