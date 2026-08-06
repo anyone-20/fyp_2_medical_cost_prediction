@@ -252,22 +252,37 @@ EXCHANGE_RATE_API_KEY = get_secret("EXCHANGE_RATE_API_KEY")
 FEATURE_LABELS = {
     "age": "Age",
     "gender": "Gender",
-    "bmi": "Body mass index",
-    "qp401": "Chronic illness status",
+    "bmi": "BMI",
+    "qp401": "Any chronic illness",
     "qq201": "Smoking status",
-    "log_past_qc701": "Previous inpatient medical cost",
-    "qc401": "Hospitalization status",
-    "log_qc7b": "Outpatient medical cost",
+    "log_past_qc701": "Previous-year inpatient cost",
+    "qc401": "Hospitalized during the past 6 months",
+    "log_qc7b": "Outpatient cost",
     "qp201": "Self-rated health",
     "qgb1": "Employment status",
+    "health_fair": "Self-rated health: Fair",
+    "health_good": "Self-rated health: Good",
+    "health_poor": "Self-rated health: Poor",
+    "health_very_good": "Self-rated health: Very good",
     "qp102": "Body weight",
     "qp605_s_1": "Medical insurance category",
     "log_qi202": "Retired allowance",
+
+    # Interaction features
     "log_qc7b bmi": "Outpatient cost × BMI",
-    "log_qc7b age": "Outpatient cost × age",
-    "qc401 age": "Hospitalization × age",
+    "log_qc7b age": "Outpatient cost × Age",
+    "log_qc7b log_past_qc701": (
+        "Outpatient cost × Previous-year inpatient cost"
+    ),
+    "bmi age": "BMI × Age",
+    "bmi log_past_qc701": (
+        "BMI × Previous-year inpatient cost"
+    ),
+    "age log_past_qc701": (
+        "Age × Previous-year inpatient cost"
+    ),
+    "qc401 age": "Hospitalization × Age",
     "qc401 bmi": "Hospitalization × BMI",
-    "bmi age": "BMI × age",
 }
 
 
@@ -297,6 +312,31 @@ EMPLOYMENT_MAPPING = {
     "Not employed": 0,
     "Employed": 1,
 }
+
+
+def get_readable_feature_name(feature_name: str) -> str:
+    """
+    Convert saved model feature names into user-friendly labels.
+    """
+
+    feature_name = str(feature_name).strip()
+
+    if feature_name in FEATURE_LABELS:
+        return FEATURE_LABELS[feature_name]
+
+    # Fallback for unseen interaction names.
+    if " " in feature_name:
+        parts = feature_name.split()
+        readable_parts = [
+            FEATURE_LABELS.get(
+                part,
+                part.replace("_", " ").title(),
+            )
+            for part in parts
+        ]
+        return " × ".join(readable_parts)
+
+    return feature_name.replace("_", " ").title()
 
 
 # ============================================================
@@ -1159,7 +1199,11 @@ def calculate_top_contributors(
 
     contribution_df = pd.DataFrame(
         {
-            "Feature": final_feature_names,
+            "Feature": [
+                get_readable_feature_name(feature)
+                for feature in final_feature_names
+            ],
+            "Raw feature name": final_feature_names,
             "SHAP contribution": blended_values,
         }
     )
@@ -2048,96 +2092,82 @@ if submitted:
                 f"{currency_error}"
             )
 
-        summary_col1, summary_col2 = st.columns(
-            2
-        )
-
-        with summary_col1:
-            st.metric(
-                "Calculated BMI",
-                f"{validated_bmi:.2f}",
-            )
-
-        with summary_col2:
-            st.metric(
-                "Log-scale prediction",
-                f"{predicted_log_cost:.4f}",
-            )
-
         # ----------------------------------------------------
         # Prediction verification
         # ----------------------------------------------------
 
         st.divider()
 
-        st.subheader(
-            "Prediction verification"
-        )
+        with st.expander(
+            "Prediction verification",
+            expanded=False,
+        ):
 
-        manual_blend = float(
-            artifact["lgb_weight"]
-            * prediction_result[
-                "lgb_log_prediction"
-            ]
-            + artifact["xgb_weight"]
-            * prediction_result[
-                "xgb_log_prediction"
-            ]
-        )
-
-        retransformed_cost = float(
-            max(
-                0.0,
-                np.expm1(
-                    predicted_log_cost
-                ),
+            manual_blend = float(
+                artifact["lgb_weight"]
+                * prediction_result[
+                    "lgb_log_prediction"
+                ]
+                + artifact["xgb_weight"]
+                * prediction_result[
+                    "xgb_log_prediction"
+                ]
             )
-        )
 
-        verification_df = pd.DataFrame(
-            {
-                "Test": [
-                    "Blending formula",
-                    "Log-to-original conversion",
-                ],
-                "Expected result": [
-                    manual_blend,
-                    retransformed_cost,
-                ],
-                "Application result": [
-                    predicted_log_cost,
-                    predicted_cost_cny,
-                ],
-                "Status": [
-                    (
-                        "Pass"
-                        if np.isclose(
-                            manual_blend,
-                            predicted_log_cost,
-                            rtol=1e-12,
-                            atol=1e-12,
-                        )
-                        else "Fail"
+            retransformed_cost = float(
+                max(
+                    0.0,
+                    np.expm1(
+                        predicted_log_cost
                     ),
-                    (
-                        "Pass"
-                        if np.isclose(
-                            retransformed_cost,
-                            predicted_cost_cny,
-                            rtol=1e-12,
-                            atol=1e-12,
-                        )
-                        else "Fail"
-                    ),
-                ],
-            }
-        )
+                )
+            )
 
-        st.dataframe(
-            verification_df,
-            use_container_width=True,
-            hide_index=True,
-        )
+            verification_df = pd.DataFrame(
+                {
+                    "Test": [
+                        "Blending formula",
+                        "Log-to-original conversion",
+                    ],
+                    "Expected result": [
+                        manual_blend,
+                        retransformed_cost,
+                    ],
+                    "Application result": [
+                        predicted_log_cost,
+                        predicted_cost_cny,
+                    ],
+                    "Status": [
+                        (
+                            "Pass"
+                            if np.isclose(
+                                manual_blend,
+                                predicted_log_cost,
+                                rtol=1e-12,
+                                atol=1e-12,
+                            )
+                            else "Fail"
+                        ),
+                        (
+                            "Pass"
+                            if np.isclose(
+                                retransformed_cost,
+                                predicted_cost_cny,
+                                rtol=1e-12,
+                                atol=1e-12,
+                            )
+                            else "Fail"
+                        ),
+                    ],
+                }
+            )
+
+            st.dataframe(
+                verification_df,
+                use_container_width=True,
+                hide_index=True,
+            )
+
 
         # ----------------------------------------------------
         # SHAP explanations
@@ -2207,7 +2237,7 @@ if submitted:
                 )
 
             with st.expander(
-                "View detailed SHAP values"
+                "View detailed model-factor values"
             ):
                 st.dataframe(
                     top_contributors,
