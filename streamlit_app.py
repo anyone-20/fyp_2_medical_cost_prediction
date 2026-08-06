@@ -226,7 +226,28 @@ MODEL_VERSION = "Gradient Boosting 2.0 — Interaction LightGBM + XGBoost Blend"
 TARGET_NAME = "log_qc701"
 ORIGINAL_TARGET_NAME = "qc701"
 
+st.sidebar.write(
+    "Current engineered input features:",
+    len(artifact["final_feature_names"])
+)
 
+st.sidebar.write(
+    "LightGBM expects:",
+    getattr(
+        artifact["lgb_model"],
+        "n_features_in_",
+        "Unknown"
+    )
+)
+
+st.sidebar.write(
+    "XGBoost expects:",
+    getattr(
+        artifact["xgb_model"],
+        "n_features_in_",
+        "Unknown"
+    )
+)
 # ============================================================
 # 3. OPTIONAL STREAMLIT SECRETS
 # ============================================================
@@ -973,54 +994,190 @@ def calculate_top_contributors(
     top_n: int = 5,
 ) -> pd.DataFrame:
     """
-    Calculate blended SHAP contributions in transformed feature
-    space.
+    Calculate SHAP contributions only for models that actually
+    contribute to the blended prediction.
+
+    This prevents a zero-weight model with a different input shape
+    from causing SHAP errors.
     """
 
-    transformed_input = prediction_result[
-        "transformed_input"
-    ]
+    model_input = prediction_result["transformed_input"]
 
-    (
-        lgb_explainer,
-        xgb_explainer,
-    ) = create_shap_explainers(
-        artifact["lgb_model"],
-        artifact["xgb_model"],
+    if isinstance(model_input, pd.DataFrame):
+        shap_input = model_input.copy()
+    else:
+        shap_input = np.asarray(model_input)
+
+    produced_feature_count = int(shap_input.shape[1])
+
+    lgb_model = artifact["lgb_model"]
+    xgb_model = artifact["xgb_model"]
+
+    lgb_weight = float(artifact["lgb_weight"])
+    xgb_weight = float(artifact["xgb_weight"])
+
+    final_feature_names = list(
+        artifact.get(
+            "final_feature_names",
+            artifact.get("feature_names", [])
+        )
     )
 
-    lgb_values = extract_shap_vector(
-        lgb_explainer,
-        transformed_input,
-    )
+    weighted_shap_vectors = []
+    used_model_names = []
 
-    xgb_values = extract_shap_vector(
-        xgb_explainer,
-        transformed_input,
-    )
+    # ========================================================
+    # LightGBM SHAP
+    # ========================================================
 
-    if len(lgb_values) != len(xgb_values):
-        raise ValueError(
-            "LightGBM and XGBoost returned different numbers "
-            "of SHAP values."
+    if lgb_weight > 1e-12:
+
+        expected_lgb_features = getattr(
+            lgb_model,
+            "n_features_in_",
+            None
         )
 
-    blended_values = (
-        artifact["lgb_weight"]
-        * lgb_values
-        + artifact["xgb_weight"]
-        * xgb_values
+        if (
+            expected_lgb_features is not None
+            and produced_feature_count
+            != int(expected_lgb_features)
+        ):
+            raise ValueError(
+                "LightGBM contributes to the prediction, but its "
+                "SHAP input feature count does not match training.\n"
+                f"Current input: {produced_feature_count}\n"
+                f"LightGBM expects: {expected_lgb_features}"
+            )
+
+        import shap
+
+        lgb_explainer = shap.TreeExplainer(
+            lgb_model
+        )
+
+        lgb_result = lgb_explainer(
+            shap_input
+        )
+
+        lgb_values = np.asarray(
+            getattr(
+                lgb_result,
+                "values",
+                lgb_result
+            )
+        )
+
+        if lgb_values.ndim == 2:
+            lgb_values = lgb_values[0]
+
+        elif lgb_values.ndim == 3:
+            lgb_values = lgb_values[0, :, 0]
+
+        elif lgb_values.ndim != 1:
+            raise ValueError(
+                "Unexpected LightGBM SHAP shape: "
+                f"{lgb_values.shape}"
+            )
+
+        weighted_shap_vectors.append(
+            lgb_weight * lgb_values
+        )
+
+        used_model_names.append(
+            "LightGBM"
+        )
+
+    # ========================================================
+    # XGBoost SHAP
+    # ========================================================
+
+    if xgb_weight > 1e-12:
+
+        expected_xgb_features = getattr(
+            xgb_model,
+            "n_features_in_",
+            None
+        )
+
+        if (
+            expected_xgb_features is not None
+            and produced_feature_count
+            != int(expected_xgb_features)
+        ):
+            raise ValueError(
+                "XGBoost contributes to the prediction, but its "
+                "SHAP input feature count does not match training.\n"
+                f"Current input: {produced_feature_count}\n"
+                f"XGBoost expects: {expected_xgb_features}"
+            )
+
+        import shap
+
+        xgb_explainer = shap.TreeExplainer(
+            xgb_model
+        )
+
+        xgb_result = xgb_explainer(
+            shap_input
+        )
+
+        xgb_values = np.asarray(
+            getattr(
+                xgb_result,
+                "values",
+                xgb_result
+            )
+        )
+
+        if xgb_values.ndim == 2:
+            xgb_values = xgb_values[0]
+
+        elif xgb_values.ndim == 3:
+            xgb_values = xgb_values[0, :, 0]
+
+        elif xgb_values.ndim != 1:
+            raise ValueError(
+                "Unexpected XGBoost SHAP shape: "
+                f"{xgb_values.shape}"
+            )
+
+        weighted_shap_vectors.append(
+            xgb_weight * xgb_values
+        )
+
+        used_model_names.append(
+            "XGBoost"
+        )
+
+    # ========================================================
+    # Combine active model explanations
+    # ========================================================
+
+    if not weighted_shap_vectors:
+        raise ValueError(
+            "Neither model has a positive blending weight."
+        )
+
+    blended_values = np.sum(
+        weighted_shap_vectors,
+        axis=0
     )
 
-    transformed_names = get_transformed_feature_names(
-        artifact,
-        len(blended_values),
-    )
+    if len(final_feature_names) != len(
+        blended_values
+    ):
+        raise ValueError(
+            "Stored feature-name count does not match SHAP output.\n"
+            f"Feature names: {len(final_feature_names)}\n"
+            f"SHAP values: {len(blended_values)}\n"
+            f"Models explained: {used_model_names}"
+        )
 
     contribution_df = pd.DataFrame(
         {
-            "Feature": transformed_names,
-            "SHAP contribution": blended_values,
+            "Feature": final_feature_names,
+            "SHAP contribution": blended_values
         }
     )
 
@@ -1030,28 +1187,23 @@ def calculate_top_contributors(
         "SHAP contribution"
     ].abs()
 
-    contribution_df[
-        "Effect"
-    ] = np.where(
-        contribution_df[
-            "SHAP contribution"
-        ] >= 0,
+    contribution_df["Effect"] = np.where(
+        contribution_df["SHAP contribution"] >= 0,
         "Increased prediction",
-        "Decreased prediction",
+        "Decreased prediction"
     )
 
     contribution_df = (
         contribution_df
         .sort_values(
             "Absolute contribution",
-            ascending=False,
+            ascending=False
         )
         .head(top_n)
         .reset_index(drop=True)
     )
 
     return contribution_df
-
 
 # ============================================================
 # 11. CURRENCY CONVERSION
