@@ -1362,7 +1362,41 @@ def load_gemini_client(
     return genai.Client(
         api_key=api_key
     )
+converted_cost = prediction_context.get(
+    "converted_cost"
+)
 
+currency_code = prediction_context.get(
+    "selected_currency_code",
+    "CNY"
+)
+
+currency_symbol = prediction_context.get(
+    "selected_currency_symbol",
+    "¥"
+)
+
+exchange_rate = prediction_context.get(
+    "exchange_rate"
+)
+
+exchange_rate_updated = prediction_context.get(
+    "exchange_rate_updated"
+)
+
+if (
+    converted_cost is not None
+    and currency_code != "CNY"
+):
+    currency_context = f"""
+- Converted cost: {currency_symbol}{converted_cost:,.2f} {currency_code}
+- Exchange rate: 1 CNY = {exchange_rate:.6f} {currency_code}
+- Exchange-rate update time: {exchange_rate_updated or "Unavailable"}
+"""
+else:
+    currency_context = """
+- Converted cost: Not requested or unavailable
+"""
 
 def generate_gemini_explanation(
     *,
@@ -1412,12 +1446,15 @@ Rules:
 2. State that the prediction is an estimate, not a guaranteed bill.
 3. Explain that SHAP describes model behaviour, not medical causation.
 4. Do not diagnose illness or recommend treatment.
-5. Do not invent values or patient information.
-6. Keep the answer concise.
+5. Do not invent exchange rates.
+6. Only use the supplied currency-conversion values.
+7. Mention that exchange rates may change over time.
+8. Keep the answer concise.
 
 Prediction context:
 - Predicted cost: ¥{prediction_context['predicted_cost_cny']:,.2f} CNY
 - Log prediction: {prediction_context['predicted_log_cost']:.4f}
+{currency_context}
 - Age: {prediction_context['age']}
 - BMI: {prediction_context['bmi']:.2f}
 - Gender: {prediction_context['gender']}
@@ -1433,7 +1470,7 @@ Top model contributors:
 User question:
 {user_message}
 """
-
+    
     response = client.models.generate_content(
         model="gemini-2.5-flash",
         contents=prompt,
@@ -2187,20 +2224,42 @@ if submitted:
         # ----------------------------------------------------
 
         st.session_state.latest_prediction_context = {
-            "predicted_cost_cny": predicted_cost_cny,
-            "predicted_log_cost": predicted_log_cost,
-            "age": int(age),
-            "bmi": validated_bmi,
-            "gender": gender_label,
-            "chronic_illness": (
-                chronic_illness_label
-            ),
-            "smoking_status": smoking_label,
-            "hospitalized": hospitalized_label,
-            "health_status": health_label,
-            "employment_status": employed_label,
-            "top_factors": top_factor_context,
-        }
+    "predicted_cost_cny": predicted_cost_cny,
+    "predicted_log_cost": predicted_log_cost,
+
+    "selected_currency_code": selected_currency["code"],
+    "selected_currency_symbol": selected_currency["symbol"],
+
+    "converted_cost": (
+        currency_result["converted_amount"]
+        if currency_result is not None
+        else None
+    ),
+
+    "exchange_rate": (
+        currency_result["rate"]
+        if currency_result is not None
+        else None
+    ),
+
+    "exchange_rate_updated": (
+        currency_result["last_updated"]
+        if currency_result is not None
+        else None
+    ),
+
+    "currency_conversion_error": currency_error,
+
+    "age": int(age),
+    "bmi": validated_bmi,
+    "gender": gender_label,
+    "chronic_illness": chronic_illness_label,
+    "smoking_status": smoking_label,
+    "hospitalized": hospitalized_label,
+    "health_status": health_label,
+    "employment_status": employed_label,
+    "top_factors": top_factor_context,
+}
         # ----------------------------------------------------
         # Prediction verification
         # ----------------------------------------------------
