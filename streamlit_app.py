@@ -2331,6 +2331,14 @@ with st.form(
         type="primary",
     )
 
+/* Force button text to white */
+
+div[data-testid="stFormSubmitButton"] button p,
+div[data-testid="stFormSubmitButton"] button span,
+div[data-testid="stFormSubmitButton"] button div {
+    color: #ffffff !important;
+    font-weight: 800 !important;
+}
 
 # ============================================================
 # 19. PROCESS THE PREDICTION
