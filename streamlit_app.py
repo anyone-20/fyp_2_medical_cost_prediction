@@ -138,6 +138,25 @@ st.markdown(
         width: auto;
     }
 
+    @keyframes floatingChatButton {
+
+    0% {
+        transform: translateY(0);
+    }
+
+    50% {
+        transform: translateY(-8px);
+    }
+
+    100% {
+        transform: translateY(0);
+    }
+}
+
+.st-key-floating_chat_launcher {
+    animation: floatingChatButton 3s ease-in-out infinite;
+}
+
     /* Circular chat button */
     .st-key-floating_chat_launcher
     button[data-testid="stPopoverButton"] {
