@@ -29,336 +29,253 @@ st.set_page_config(
 
 # ============================================================
 # 1A. USER-INTERFACE STYLING
-# Professional light-blue and white theme
+# Adaptive professional blue theme for light and dark modes
 # ============================================================
 
 st.markdown(
     """
     <style>
     :root {
-        --blue-50: #f5f9ff;
-        --blue-100: #eaf3ff;
-        --blue-200: #d7e8fb;
-        --blue-300: #b9d5f2;
-        --blue-500: #4f8fc9;
-        --blue-600: #3478b7;
-        --blue-700: #245f96;
-        --navy: #173b5e;
-        --text: #2f465c;
-        --muted: #6f8294;
-        --white: #ffffff;
-        --border: rgba(52, 120, 183, 0.17);
-        --shadow: 0 10px 30px rgba(32, 76, 116, 0.09);
-        --shadow-soft: 0 5px 18px rgba(32, 76, 116, 0.07);
+        --app-primary: var(--st-primary-color, #4f8fc9);
+        --app-bg: var(--st-background-color, #f7fbff);
+        --app-surface: var(--st-secondary-background-color, #ffffff);
+        --app-text: var(--st-text-color, #173b5e);
+        --app-border: var(--st-border-color, rgba(52,120,183,.18));
+        --app-soft: color-mix(in srgb, var(--app-primary) 10%, var(--app-surface));
+        --app-soft-2: color-mix(in srgb, var(--app-primary) 18%, var(--app-surface));
+        --app-muted: color-mix(in srgb, var(--app-text) 68%, transparent);
+        --app-shadow: 0 10px 28px color-mix(in srgb, var(--app-text) 10%, transparent);
+        --app-shadow-soft: 0 5px 16px color-mix(in srgb, var(--app-text) 7%, transparent);
     }
 
-    /* Main application background */
     .stApp {
-        background:
-            linear-gradient(
-                180deg,
-                #f7fbff 0%,
-                #ffffff 45%,
-                #f3f8fd 100%
-            );
-        color: var(--text);
+        background: linear-gradient(
+            180deg,
+            color-mix(in srgb, var(--app-primary) 5%, var(--app-bg)) 0%,
+            var(--app-bg) 42%,
+            color-mix(in srgb, var(--app-primary) 3%, var(--app-bg)) 100%
+        );
+        color: var(--app-text);
     }
 
-    /* Main page spacing */
     .block-container {
         max-width: 1120px;
         padding-top: 1.8rem;
         padding-bottom: 5.5rem;
     }
 
-    /* Typography */
-    html,
-    body,
-    [class*="css"] {
-        color: var(--text);
+    html, body, [class*="css"], p, label, span, small,
+    .stMarkdown, .stCaption, h1, h2, h3, h4 {
+        color: var(--app-text);
     }
 
-    p,
-    label,
-    .stMarkdown,
-    .stCaption {
-        color: var(--text);
-    }
+    footer { visibility: hidden; }
 
-    h1,
-    h2,
-    h3,
-    h4 {
-        color: var(--navy);
-        letter-spacing: -0.012em;
-    }
-
-    /* Hide Streamlit's default footer */
-    footer {
-        visibility: hidden;
-    }
-
-    /* Hero section */
     .app-hero {
         padding: 1.55rem 1.65rem;
-        border: 1px solid var(--border);
+        border: 1px solid var(--app-border);
         border-radius: 20px;
         margin-bottom: 1.1rem;
-        background:
-            linear-gradient(
-                135deg,
-                rgba(255, 255, 255, 0.98),
-                rgba(234, 243, 255, 0.96)
-            );
-        box-shadow: var(--shadow);
+        background: linear-gradient(135deg, var(--app-surface), var(--app-soft));
+        box-shadow: var(--app-shadow);
     }
 
     .app-hero h1 {
         margin: 0;
-        color: var(--navy);
+        color: var(--app-text);
         font-size: 2.05rem;
         line-height: 1.2;
-        font-weight: 750;
+        font-weight: 760;
     }
 
     .app-hero p {
-        margin: 0.62rem 0 0 0;
-        color: var(--muted);
+        margin: .62rem 0 0 0;
+        color: var(--app-muted);
         font-size: 1rem;
         line-height: 1.55;
         max-width: 840px;
     }
 
-    /* Information cards */
     .info-card {
         padding: 1.08rem 1.15rem;
-        border: 1px solid var(--border);
-        border-radius: 16px;
-        background: rgba(255, 255, 255, 0.94);
         min-height: 116px;
-        box-shadow: var(--shadow-soft);
-        transition:
-            transform 160ms ease,
-            box-shadow 160ms ease,
-            border-color 160ms ease;
+        border: 1px solid var(--app-border);
+        border-radius: 16px;
+        background: var(--app-surface);
+        box-shadow: var(--app-shadow-soft);
+        transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
     }
 
     .info-card:hover {
         transform: translateY(-2px);
-        box-shadow: 0 10px 24px rgba(32, 76, 116, 0.11);
-        border-color: rgba(52, 120, 183, 0.28);
+        border-color: color-mix(in srgb, var(--app-primary) 38%, var(--app-border));
+        box-shadow: var(--app-shadow);
     }
 
     .info-card-title {
-        color: var(--blue-700);
-        font-size: 0.76rem;
-        font-weight: 750;
+        color: var(--app-primary);
+        font-size: .76rem;
+        font-weight: 760;
         text-transform: uppercase;
-        letter-spacing: 0.065em;
-        margin-bottom: 0.38rem;
+        letter-spacing: .065em;
+        margin-bottom: .38rem;
     }
 
     .info-card-value {
-        color: var(--navy);
+        color: var(--app-text);
         font-size: 1.06rem;
-        font-weight: 750;
-        margin-bottom: 0.24rem;
+        font-weight: 760;
+        margin-bottom: .24rem;
     }
 
     .info-card-text {
-        color: var(--muted);
-        font-size: 0.89rem;
+        color: var(--app-muted);
+        font-size: .89rem;
         line-height: 1.45;
     }
 
-    /* Forms and input controls */
     div[data-testid="stForm"] {
-        border: 1px solid var(--border);
+        padding: 1.25rem 1.3rem 1.35rem;
+        border: 1px solid var(--app-border);
         border-radius: 20px;
-        padding: 1.25rem 1.3rem 1.35rem 1.3rem;
-        background: rgba(255, 255, 255, 0.96);
-        box-shadow: var(--shadow);
+        background: var(--app-surface);
+        box-shadow: var(--app-shadow);
     }
 
     div[data-baseweb="input"] > div,
     div[data-baseweb="select"] > div,
-    div[data-baseweb="base-input"] {
+    div[data-baseweb="base-input"],
+    div[data-baseweb="textarea"] > div {
         border-radius: 10px !important;
-        border-color: rgba(52, 120, 183, 0.20) !important;
-        background: var(--white) !important;
+        border-color: var(--app-border) !important;
+        background: var(--app-surface) !important;
+        color: var(--app-text) !important;
     }
 
     div[data-baseweb="input"] > div:focus-within,
-    div[data-baseweb="select"] > div:focus-within {
-        border-color: var(--blue-500) !important;
-        box-shadow: 0 0 0 2px rgba(79, 143, 201, 0.14) !important;
+    div[data-baseweb="select"] > div:focus-within,
+    div[data-baseweb="textarea"] > div:focus-within {
+        border-color: var(--app-primary) !important;
+        box-shadow: 0 0 0 2px color-mix(in srgb, var(--app-primary) 18%, transparent) !important;
     }
 
-    input,
-    textarea {
-        color: var(--text) !important;
+    input, textarea {
+        color: var(--app-text) !important;
+        caret-color: var(--app-primary) !important;
     }
 
-    hr {
-        border-color: rgba(52, 120, 183, 0.13) !important;
+    input::placeholder, textarea::placeholder {
+        color: var(--app-muted) !important;
     }
 
-    /* Alerts */
+    hr { border-color: var(--app-border) !important; }
+
     div[data-testid="stAlert"] {
+        border: 1px solid var(--app-border);
         border-radius: 13px;
-        border: 1px solid rgba(52, 120, 183, 0.14);
-        box-shadow: var(--shadow-soft);
+        box-shadow: var(--app-shadow-soft);
     }
 
-    /* Buttons */
-    button {
-        border-radius: 10px !important;
-    }
+    button { border-radius: 10px !important; }
 
-   div[data-testid="stFormSubmitButton"] button {
-    min-height: 3.2rem;
-
-    border: 1px solid var(--blue-600);
-    border-radius: 12px !important;
-
-    background: linear-gradient(
-        135deg,
-        #4f8fc9,
-        #3478b7
-    ) !important;
-
-    color: #ffffff !important;
-
-    font-size: 1.05rem !important;
-    font-weight: 800 !important;
-    letter-spacing: 0.2px;
-
-    box-shadow: 0 8px 20px rgba(52,120,183,0.20);
-
-    transition:
-        transform 150ms ease,
-        box-shadow 150ms ease,
-        filter 150ms ease;
-}
-
-/* Force button text to white */
-
-div[data-testid="stFormSubmitButton"] button,
-div[data-testid="stFormSubmitButton"] button span,
-div[data-testid="stFormSubmitButton"] button p,
-div[data-testid="stFormSubmitButton"] button div {
-    color: #ffffff !important;
-    font-weight: 800 !important;
-}
-
-        box-shadow: 0 8px 20px rgba(52, 120, 183, 0.20);
-        transition:
-            transform 150ms ease,
-            box-shadow 150ms ease,
-            filter 150ms ease;
+    div[data-testid="stFormSubmitButton"] button {
+        min-height: 3.1rem;
+        border: 1px solid var(--app-primary) !important;
+        border-radius: 12px !important;
+        background: linear-gradient(
+            135deg,
+            color-mix(in srgb, var(--app-primary) 90%, #ffffff),
+            var(--app-primary)
+        ) !important;
+        color: #ffffff !important;
+        font-size: 1.05rem !important;
+        font-weight: 800 !important;
+        letter-spacing: .15px;
+        box-shadow: 0 8px 20px color-mix(in srgb, var(--app-primary) 28%, transparent);
     }
 
     div[data-testid="stFormSubmitButton"] button:hover {
         transform: translateY(-1px);
-        box-shadow: 0 10px 24px rgba(52, 120, 183, 0.25);
-        filter: brightness(1.02);
+        filter: brightness(1.04);
+    }
+
+    div[data-testid="stFormSubmitButton"] button,
+    div[data-testid="stFormSubmitButton"] button span,
+    div[data-testid="stFormSubmitButton"] button p,
+    div[data-testid="stFormSubmitButton"] button div {
+        color: #ffffff !important;
+        font-weight: 800 !important;
     }
 
     div[data-testid="stDownloadButton"] button,
     .stButton button {
-        border: 1px solid rgba(52, 120, 183, 0.25);
-        background: rgba(255, 255, 255, 0.97);
-        color: var(--blue-700);
-        font-weight: 650;
+        border: 1px solid var(--app-border) !important;
+        background: var(--app-surface) !important;
+        color: var(--app-primary) !important;
+        font-weight: 650 !important;
     }
 
     div[data-testid="stDownloadButton"] button:hover,
     .stButton button:hover {
-        border-color: var(--blue-500);
-        background: var(--blue-50);
-        color: var(--blue-700);
+        border-color: var(--app-primary) !important;
+        background: var(--app-soft) !important;
     }
 
-    /* Metrics */
     div[data-testid="stMetric"] {
-        border: 1px solid var(--border);
+        padding: .95rem 1.05rem;
+        border: 1px solid var(--app-border);
         border-radius: 16px;
-        padding: 0.95rem 1.05rem;
-        background:
-            linear-gradient(
-                145deg,
-                rgba(255, 255, 255, 0.98),
-                rgba(234, 243, 255, 0.92)
-            );
-        box-shadow: var(--shadow-soft);
+        background: linear-gradient(145deg, var(--app-surface), var(--app-soft));
+        box-shadow: var(--app-shadow-soft);
     }
 
-    div[data-testid="stMetricLabel"] {
-        color: var(--muted);
-    }
+    div[data-testid="stMetricLabel"] { color: var(--app-muted); }
+    div[data-testid="stMetricValue"] { color: var(--app-text); }
 
-    div[data-testid="stMetricValue"] {
-        color: var(--navy);
-    }
-
-    /* Expanders, tables, and tabs */
     div[data-testid="stExpander"] {
-        border: 1px solid var(--border);
-        border-radius: 14px;
         overflow: hidden;
-        background: rgba(255, 255, 255, 0.90);
-        box-shadow: var(--shadow-soft);
+        border: 1px solid var(--app-border);
+        border-radius: 14px;
+        background: var(--app-surface);
+        box-shadow: var(--app-shadow-soft);
     }
 
     div[data-testid="stExpander"] details summary {
-        color: var(--navy);
+        color: var(--app-text);
         font-weight: 650;
     }
 
     div[data-testid="stDataFrame"] {
-        border: 1px solid rgba(52, 120, 183, 0.14);
-        border-radius: 12px;
         overflow: hidden;
-        box-shadow: var(--shadow-soft);
+        border: 1px solid var(--app-border);
+        border-radius: 12px;
+        box-shadow: var(--app-shadow-soft);
     }
 
     button[data-baseweb="tab"] {
-        color: var(--muted);
+        color: var(--app-muted);
         font-weight: 650;
     }
 
     button[data-baseweb="tab"][aria-selected="true"] {
-        color: var(--blue-700);
+        color: var(--app-primary);
     }
 
-    /* Sidebar */
     section[data-testid="stSidebar"] {
-        background:
-            linear-gradient(
-                180deg,
-                #eef6ff 0%,
-                #f7fbff 55%,
-                #ffffff 100%
-            );
-        border-right: 1px solid rgba(52, 120, 183, 0.14);
+        background: linear-gradient(180deg, var(--app-soft) 0%, var(--app-surface) 58%, var(--app-bg) 100%);
+        border-right: 1px solid var(--app-border);
     }
 
-    section[data-testid="stSidebar"] > div {
-        padding-top: 1.35rem;
-    }
+    section[data-testid="stSidebar"] > div { padding-top: 1.35rem; }
 
     section[data-testid="stSidebar"] h1,
     section[data-testid="stSidebar"] h2,
-    section[data-testid="stSidebar"] h3 {
-        color: var(--navy);
-    }
-
+    section[data-testid="stSidebar"] h3,
     section[data-testid="stSidebar"] p,
     section[data-testid="stSidebar"] span {
-        color: #5f7488;
+        color: var(--app-text);
     }
 
-    /* Floating chat */
     .st-key-floating_chat_launcher {
         position: fixed;
         right: 24px;
@@ -369,143 +286,81 @@ div[data-testid="stFormSubmitButton"] button div {
     }
 
     @keyframes floatingChatButton {
-        0% {
-            transform: translateY(0);
-        }
-
-        50% {
-            transform: translateY(-6px);
-        }
-
-        100% {
-            transform: translateY(0);
-        }
+        0%, 100% { transform: translateY(0); }
+        50% { transform: translateY(-6px); }
     }
 
-   /* ============================================================
-   Floating Ask AI button
-   ============================================================ */
-/* Make the Ask AI button text larger */
-
-.st-key-floating_chat_launcher
-button[data-testid="stPopoverButton"] {
-
-    font-size: 1.35rem !important;
-    font-weight: 800 !important;
-}
-
-.st-key-floating_chat_launcher
-button[data-testid="stPopoverButton"] span,
-.st-key-floating_chat_launcher
-button[data-testid="stPopoverButton"] p,
-.st-key-floating_chat_launcher
-button[data-testid="stPopoverButton"] div {
-
-    font-size: 1.35rem !important;
-    font-weight: 800 !important;
-    color: white !important;
-}
-.st-key-floating_chat_launcher
-button[data-testid="stPopoverButton"] {
-
-    width: 82px;
-    height: 82px;
-    min-width: 82px;
-
-    border-radius: 50% !important;
-
-    border: 2px solid rgba(255,255,255,.95);
-
-    background: linear-gradient(
-        135deg,
-        #7fc8ff,
-        #58b5ff
-    ) !important;
-
-    color: white !important;
-
-    font-size: 2rem !important;
-    font-weight: 700;
-
-    box-shadow:
-        0 10px 30px rgba(0,115,230,.28);
-
-    transition: all .25s ease;
-}
-
-.st-key-floating_chat_launcher
-button[data-testid="stPopoverButton"]:hover{
-
-    background: linear-gradient(
-        135deg,
-        #96d5ff,
-        #66bfff
-    ) !important;
-
-    transform: scale(1.08);
-
-    box-shadow:
-        0 14px 36px rgba(0,115,230,.35);
-}
-
-    .st-key-floating_chat_launcher
-    button[data-testid="stPopoverButton"]:hover {
-        box-shadow: 0 13px 30px rgba(32, 76, 116, 0.32);
-        transform: scale(1.03);
+    .st-key-floating_chat_launcher button[data-testid="stPopoverButton"] {
+        min-width: 94px;
+        min-height: 62px;
+        padding: .72rem 1rem !important;
+        border: 2px solid color-mix(in srgb, var(--app-primary) 30%, var(--app-surface)) !important;
+        border-radius: 999px !important;
+        background: linear-gradient(
+            135deg,
+            color-mix(in srgb, var(--app-primary) 24%, var(--app-surface)),
+            color-mix(in srgb, var(--app-primary) 38%, var(--app-surface))
+        ) !important;
+        color: var(--app-text) !important;
+        box-shadow: var(--app-shadow);
     }
 
-    /* Popover */
+    .st-key-floating_chat_launcher button[data-testid="stPopoverButton"]:hover {
+        transform: scale(1.04);
+        filter: brightness(1.03);
+    }
+
+    .st-key-floating_chat_launcher button[data-testid="stPopoverButton"] span,
+    .st-key-floating_chat_launcher button[data-testid="stPopoverButton"] p,
+    .st-key-floating_chat_launcher button[data-testid="stPopoverButton"] div {
+        color: var(--app-text) !important;
+        font-size: 1.25rem !important;
+        font-weight: 800 !important;
+        line-height: 1.1 !important;
+    }
+
     div[data-baseweb="popover"] {
         max-width: min(420px, calc(100vw - 32px));
     }
 
     div[data-baseweb="popover"] > div {
-        border: 1px solid var(--border);
+        border: 1px solid var(--app-border);
         border-radius: 16px;
-        background: #ffffff;
-        box-shadow: 0 18px 48px rgba(32, 76, 116, 0.18);
+        background: var(--app-surface);
+        color: var(--app-text);
+        box-shadow: var(--app-shadow);
     }
 
-    /* Chat message cards */
     .mini-chat-user {
-        padding: 0.68rem 0.78rem;
-        border: 1px solid rgba(52, 120, 183, 0.14);
+        padding: .68rem .78rem;
+        border: 1px solid var(--app-border);
         border-radius: 13px 13px 4px 13px;
-        margin: 0.42rem 0 0.42rem 2rem;
-        background: rgba(215, 232, 251, 0.72);
-        color: var(--navy);
+        margin: .42rem 0 .42rem 2rem;
+        background: var(--app-soft-2);
+        color: var(--app-text);
     }
 
     .mini-chat-assistant {
-        padding: 0.68rem 0.78rem;
-        border: 1px solid rgba(52, 120, 183, 0.10);
+        padding: .68rem .78rem;
+        border: 1px solid var(--app-border);
         border-radius: 13px 13px 13px 4px;
-        margin: 0.42rem 2rem 0.42rem 0;
-        background: rgba(245, 249, 255, 0.96);
-        color: var(--text);
+        margin: .42rem 2rem .42rem 0;
+        background: var(--app-surface);
+        color: var(--app-text);
     }
 
-    /* Scrollbars */
-    ::-webkit-scrollbar {
-        width: 10px;
-        height: 10px;
-    }
-
-    ::-webkit-scrollbar-track {
-        background: rgba(234, 243, 255, 0.60);
-    }
-
+    ::-webkit-scrollbar { width: 10px; height: 10px; }
+    ::-webkit-scrollbar-track { background: var(--app-soft); }
     ::-webkit-scrollbar-thumb {
-        border: 2px solid rgba(234, 243, 255, 0.72);
+        border: 2px solid var(--app-soft);
         border-radius: 999px;
-        background: rgba(79, 143, 201, 0.50);
+        background: color-mix(in srgb, var(--app-primary) 55%, transparent);
     }
 
-    /* Mobile responsiveness */
     @media (max-width: 700px) {
         .block-container {
-            padding-left: 0.85rem;
-            padding-right: 0.85rem;
+            padding-left: .85rem;
+            padding-right: .85rem;
             padding-top: 1.05rem;
         }
 
@@ -514,31 +369,29 @@ button[data-testid="stPopoverButton"]:hover{
             border-radius: 17px;
         }
 
-        .app-hero h1 {
-            font-size: 1.58rem;
+        .app-hero h1 { font-size: 1.58rem; }
+        .info-card { min-height: auto; }
+        div[data-testid="stForm"] { padding: 1rem .9rem 1.1rem; }
+        .st-key-floating_chat_launcher { right: 16px; bottom: 16px; }
+
+        .st-key-floating_chat_launcher button[data-testid="stPopoverButton"] {
+            min-width: 84px;
+            min-height: 56px;
+            padding: .62rem .85rem !important;
         }
 
-        .info-card {
-            min-height: auto;
-        }
-
-        div[data-testid="stForm"] {
-            padding: 1rem 0.9rem 1.1rem 0.9rem;
-        }
-
-        .st-key-floating_chat_launcher {
-            right: 16px;
-            bottom: 16px;
+        .st-key-floating_chat_launcher button[data-testid="stPopoverButton"] span,
+        .st-key-floating_chat_launcher button[data-testid="stPopoverButton"] p,
+        .st-key-floating_chat_launcher button[data-testid="stPopoverButton"] div {
+            font-size: 1.08rem !important;
         }
     }
 
     @media (prefers-reduced-motion: reduce) {
-        *,
-        *::before,
-        *::after {
-            animation-duration: 0.01ms !important;
+        *, *::before, *::after {
+            animation-duration: .01ms !important;
             animation-iteration-count: 1 !important;
-            transition-duration: 0.01ms !important;
+            transition-duration: .01ms !important;
         }
     }
     </style>
@@ -2390,7 +2243,6 @@ with st.form(
     )
 
 
-
 # ============================================================
 # 19. PROCESS THE PREDICTION
 # ============================================================
@@ -2837,7 +2689,7 @@ with st.container(
     key="floating_chat_launcher"
 ):
     with st.popover(
-        "Ask Me",
+        "🏥 Ask AI",
         help=(
             "Open the Medical Cost Prediction Assistant"
         ),
