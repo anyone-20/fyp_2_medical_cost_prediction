@@ -2092,83 +2092,7 @@ if submitted:
                 f"{currency_error}"
             )
 
-        # ----------------------------------------------------
-        # Prediction verification
-        # ----------------------------------------------------
-
-        st.divider()
-
-        with st.expander(
-            "Prediction verification",
-            expanded=False,
-        ):
-
-            manual_blend = float(
-                artifact["lgb_weight"]
-                * prediction_result[
-                    "lgb_log_prediction"
-                ]
-                + artifact["xgb_weight"]
-                * prediction_result[
-                    "xgb_log_prediction"
-                ]
-            )
-
-            retransformed_cost = float(
-                max(
-                    0.0,
-                    np.expm1(
-                        predicted_log_cost
-                    ),
-                )
-            )
-
-            verification_df = pd.DataFrame(
-                {
-                    "Test": [
-                        "Blending formula",
-                        "Log-to-original conversion",
-                    ],
-                    "Expected result": [
-                        manual_blend,
-                        retransformed_cost,
-                    ],
-                    "Application result": [
-                        predicted_log_cost,
-                        predicted_cost_cny,
-                    ],
-                    "Status": [
-                        (
-                            "Pass"
-                            if np.isclose(
-                                manual_blend,
-                                predicted_log_cost,
-                                rtol=1e-12,
-                                atol=1e-12,
-                            )
-                            else "Fail"
-                        ),
-                        (
-                            "Pass"
-                            if np.isclose(
-                                retransformed_cost,
-                                predicted_cost_cny,
-                                rtol=1e-12,
-                                atol=1e-12,
-                            )
-                            else "Fail"
-                        ),
-                    ],
-                }
-            )
-
-            st.dataframe(
-                verification_df,
-                use_container_width=True,
-                hide_index=True,
-            )
-
-
+     
         # ----------------------------------------------------
         # SHAP explanations
         # ----------------------------------------------------
@@ -2367,6 +2291,82 @@ if submitted:
         )
 
         st.exception(error)
+
+   # ----------------------------------------------------
+        # Prediction verification
+        # ----------------------------------------------------
+
+        st.divider()
+
+        with st.expander(
+            "Prediction verification",
+            expanded=False,
+        ):
+
+            manual_blend = float(
+                artifact["lgb_weight"]
+                * prediction_result[
+                    "lgb_log_prediction"
+                ]
+                + artifact["xgb_weight"]
+                * prediction_result[
+                    "xgb_log_prediction"
+                ]
+            )
+
+            retransformed_cost = float(
+                max(
+                    0.0,
+                    np.expm1(
+                        predicted_log_cost
+                    ),
+                )
+            )
+
+            verification_df = pd.DataFrame(
+                {
+                    "Test": [
+                        "Blending formula",
+                        "Log-to-original conversion",
+                    ],
+                    "Expected result": [
+                        manual_blend,
+                        retransformed_cost,
+                    ],
+                    "Application result": [
+                        predicted_log_cost,
+                        predicted_cost_cny,
+                    ],
+                    "Status": [
+                        (
+                            "Pass"
+                            if np.isclose(
+                                manual_blend,
+                                predicted_log_cost,
+                                rtol=1e-12,
+                                atol=1e-12,
+                            )
+                            else "Fail"
+                        ),
+                        (
+                            "Pass"
+                            if np.isclose(
+                                retransformed_cost,
+                                predicted_cost_cny,
+                                rtol=1e-12,
+                                atol=1e-12,
+                            )
+                            else "Fail"
+                        ),
+                    ],
+                }
+            )
+
+            st.dataframe(
+                verification_df,
+                use_container_width=True,
+                hide_index=True,
+            )
 
 
 # ============================================================
