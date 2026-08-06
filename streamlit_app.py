@@ -215,18 +215,31 @@ st.markdown(
         border-radius: 10px !important;
     }
 
-    div[data-testid="stFormSubmitButton"] button {
-        min-height: 3.1rem;
-        border: 1px solid var(--blue-600);
-        border-radius: 12px !important;
-        background:
-            linear-gradient(
-                135deg,
-                #4f8fc9,
-                #3478b7
-            ) !important;
-        color: #ffffff !important;
-        font-weight: 750;
+   div[data-testid="stFormSubmitButton"] button {
+    min-height: 3.2rem;
+
+    border: 1px solid var(--blue-600);
+    border-radius: 12px !important;
+
+    background: linear-gradient(
+        135deg,
+        #4f8fc9,
+        #3478b7
+    ) !important;
+
+    color: #ffffff !important;
+
+    font-size: 1.05rem !important;
+    font-weight: 800 !important;
+    letter-spacing: 0.2px;
+
+    box-shadow: 0 8px 20px rgba(52,120,183,0.20);
+
+    transition:
+        transform 150ms ease,
+        box-shadow 150ms ease,
+        filter 150ms ease;
+}
         box-shadow: 0 8px 20px rgba(52, 120, 183, 0.20);
         transition:
             transform 150ms ease,
