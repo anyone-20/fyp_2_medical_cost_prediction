@@ -434,8 +434,21 @@ def get_secret(key: str) -> str | None:
         return None
 
 
-GEMINI_API_KEY = get_secret("GEMINI_API_KEY")
-EXCHANGE_RATE_API_KEY = get_secret("EXCHANGE_RATE_API_KEY")
+import os
+import streamlit as st
+
+gemini_key = os.getenv("GEMINI_API_KEY")
+exchange_key = os.getenv("EXCHANGE_RATE_API_KEY")
+
+if gemini_key:
+    st.success("✅ Gemini API key detected by Render")
+else:
+    st.error("❌ GEMINI_API_KEY not found")
+
+if exchange_key:
+    st.success("✅ Exchange Rate API key detected by Render")
+else:
+    st.error("❌ EXCHANGE_RATE_API_KEY not found")
 
 
 # ============================================================
