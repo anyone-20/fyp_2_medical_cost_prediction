@@ -442,7 +442,7 @@ import streamlit as st
 gemini_key = os.getenv("GEMINI_API_KEY")
 exchange_key = os.getenv("EXCHANGE_RATE_API_KEY")
 
-if GEMINI_API_KEY:
+if gemini_key:
     st.caption("🟢 AI assistant ready")
 else:
     st.caption("🔴 AI assistant unavailable")
