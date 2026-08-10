@@ -442,15 +442,10 @@ import streamlit as st
 gemini_key = os.getenv("GEMINI_API_KEY")
 exchange_key = os.getenv("EXCHANGE_RATE_API_KEY")
 
-if gemini_key:
-    st.success("✅ Gemini API key detected by Render")
+if GEMINI_API_KEY:
+    st.caption("🟢 AI assistant ready")
 else:
-    st.error("❌ GEMINI_API_KEY not found")
-
-if exchange_key:
-    st.success("✅ Exchange Rate API key detected by Render")
-else:
-    st.error("❌ EXCHANGE_RATE_API_KEY not found")
+    st.caption("🔴 AI assistant unavailable")
 
 
 # ============================================================
