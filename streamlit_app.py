@@ -7,6 +7,8 @@
 from __future__ import annotations
 
 from pathlib import Path
+import json
+import re
 from typing import Any
 
 import joblib
@@ -1684,6 +1686,767 @@ def load_gemini_client(
     )
 
 
+
+def detect_chat_intent(
+    *,
+    user_message: str,
+    prediction_context: dict[str, Any],
+) -> dict[str, Any]:
+    """
+    Ask Gemini to classify the user's message.
+
+    Gemini is ONLY used to understand the request and extract
+    hypothetical feature changes. Gemini never calculates the
+    medical-cost prediction itself.
+    """
+
+    if not GEMINI_API_KEY:
+        raise RuntimeError(
+            "GEMINI_API_KEY is not configured."
+        )
+
+    client = load_gemini_client(
+        GEMINI_API_KEY
+    )
+
+    current_inputs = prediction_context.get(
+        "raw_inputs",
+        {},
+    )
+
+    prompt = f"""
+You are an intent parser inside a machine-learning medical-cost
+prediction application.
+
+Classify the user's request into exactly one of these intents:
+
+1. "explanation"
+   Use this for:
+   - Why is my predicted cost high or low?
+   - Which SHAP factors increased or decreased my prediction?
+   - How can the model prediction potentially become lower?
+   - What does a SHAP value mean?
+   - General questions about the current prediction.
+
+2. "what_if"
+   Use this ONLY when the user explicitly asks to change one or
+   more model inputs and asks what the prediction would become.
+
+Examples:
+- "If my weight is 45 kg what will my cost be?"
+- "What if I become employed?"
+- "If I stop smoking and weigh 55 kg, what is the new result?"
+- "Change my outpatient cost to 300 MYR and predict again."
+
+IMPORTANT RULES:
+- DO NOT calculate any medical-cost prediction.
+- DO NOT invent a feature value.
+- Extract only values explicitly requested by the user.
+- Return ONLY valid JSON.
+- Never include markdown fences.
+- Do not add explanatory prose.
+
+Current raw user/model values:
+- age: {current_inputs.get("age")}
+- gender_label: {current_inputs.get("gender_label")}
+- height_cm: {current_inputs.get("height_cm")}
+- weight_kg: {current_inputs.get("weight_kg")}
+- chronic_illness_label: {current_inputs.get("chronic_illness_label")}
+- smoking_label: {current_inputs.get("smoking_label")}
+- hospitalized_label: {current_inputs.get("hospitalized_label")}
+- health_label: {current_inputs.get("health_label")}
+- employed_label: {current_inputs.get("employed_label")}
+- outpatient_cost_cny: {current_inputs.get("outpatient_cost_cny")}
+- previous_inpatient_cost_cny: {current_inputs.get("previous_inpatient_cost_cny")}
+
+User-selected currency:
+- code: {prediction_context.get("selected_currency_code", "CNY")}
+- symbol: {prediction_context.get("selected_currency_symbol", "¥")}
+
+Supported change names are ONLY:
+age
+gender_label
+height_cm
+weight_kg
+chronic_illness_label
+smoking_label
+hospitalized_label
+health_label
+employed_label
+outpatient_cost_cny
+previous_inpatient_cost_cny
+
+For categorical values, use ONLY these exact strings:
+
+gender_label:
+- Female
+- Male
+
+chronic_illness_label:
+- No
+- Yes
+
+smoking_label:
+- No
+- Yes
+
+hospitalized_label:
+- No
+- Yes
+
+health_label:
+- Excellent
+- Very good
+- Good
+- Fair
+- Poor
+
+employed_label:
+- Not employed
+- Employed
+
+If the user gives a medical-cost value in their selected currency
+rather than CNY, return it using these special temporary keys:
+
+outpatient_cost_selected_currency
+previous_inpatient_cost_selected_currency
+
+Examples of valid output:
+
+{{"intent":"explanation","changes":{{}}}}
+
+{{"intent":"what_if","changes":{{"weight_kg":45}}}}
+
+{{"intent":"what_if","changes":{{"employed_label":"Employed"}}}}
+
+{{"intent":"what_if","changes":{{"weight_kg":55,"smoking_label":"No"}}}}
+
+User message:
+{user_message}
+"""
+
+    response = client.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=prompt,
+    )
+
+    response_text = getattr(
+        response,
+        "text",
+        None,
+    )
+
+    if not response_text:
+        raise RuntimeError(
+            "Gemini returned an empty intent response."
+        )
+
+    cleaned = response_text.strip()
+
+    cleaned = re.sub(
+        r"^```(?:json)?\s*",
+        "",
+        cleaned,
+        flags=re.IGNORECASE,
+    )
+
+    cleaned = re.sub(
+        r"\s*```$",
+        "",
+        cleaned,
+    )
+
+    result = json.loads(
+        cleaned
+    )
+
+    if not isinstance(
+        result,
+        dict,
+    ):
+        raise ValueError(
+            "Gemini intent output must be a JSON object."
+        )
+
+    intent = str(
+        result.get(
+            "intent",
+            "explanation",
+        )
+    ).strip()
+
+    if intent not in {
+        "explanation",
+        "what_if",
+    }:
+        intent = "explanation"
+
+    changes = result.get(
+        "changes",
+        {},
+    )
+
+    if not isinstance(
+        changes,
+        dict,
+    ):
+        changes = {}
+
+    return {
+        "intent": intent,
+        "changes": changes,
+    }
+
+
+def convert_what_if_currency_changes(
+    *,
+    changes: dict[str, Any],
+    prediction_context: dict[str, Any],
+) -> dict[str, Any]:
+    """
+    Convert hypothetical monetary values entered in the user's
+    preferred currency into CNY before they are validated and sent
+    to the model.
+    """
+
+    changes = dict(
+        changes
+    )
+
+    currency_code = prediction_context.get(
+        "selected_currency_code",
+        "CNY",
+    )
+
+    exchange_rate = float(
+        prediction_context.get(
+            "exchange_rate",
+            1.0,
+        )
+        or 1.0
+    )
+
+    selected_outpatient = changes.pop(
+        "outpatient_cost_selected_currency",
+        None,
+    )
+
+    if selected_outpatient is not None:
+        changes[
+            "outpatient_cost_cny"
+        ] = convert_selected_currency_to_cny(
+            amount=float(
+                selected_outpatient
+            ),
+            source_currency=currency_code,
+            rate_from_cny=exchange_rate,
+        )
+
+    selected_previous = changes.pop(
+        "previous_inpatient_cost_selected_currency",
+        None,
+    )
+
+    if selected_previous is not None:
+        changes[
+            "previous_inpatient_cost_cny"
+        ] = convert_selected_currency_to_cny(
+            amount=float(
+                selected_previous
+            ),
+            source_currency=currency_code,
+            rate_from_cny=exchange_rate,
+        )
+
+    return changes
+
+
+def validate_what_if_changes(
+    changes: dict[str, Any],
+) -> dict[str, Any]:
+    """
+    Validate Gemini-extracted hypothetical feature changes.
+
+    Only supported model inputs are accepted.
+    """
+
+    allowed_features = {
+        "age",
+        "gender_label",
+        "height_cm",
+        "weight_kg",
+        "chronic_illness_label",
+        "smoking_label",
+        "hospitalized_label",
+        "health_label",
+        "employed_label",
+        "outpatient_cost_cny",
+        "previous_inpatient_cost_cny",
+    }
+
+    cleaned = {}
+
+    for feature, value in changes.items():
+
+        if feature not in allowed_features:
+            continue
+
+        if feature == "age":
+            value = int(
+                value
+            )
+
+            if not 1 <= value <= 119:
+                raise ValueError(
+                    "Age must be between 1 and 119."
+                )
+
+        elif feature == "height_cm":
+            value = float(
+                value
+            )
+
+            if not 50 <= value <= 250:
+                raise ValueError(
+                    "Height must be between 50 and 250 cm."
+                )
+
+        elif feature == "weight_kg":
+            value = float(
+                value
+            )
+
+            if not 10 <= value <= 300:
+                raise ValueError(
+                    "Weight must be between 10 and 300 kg."
+                )
+
+        elif feature in {
+            "outpatient_cost_cny",
+            "previous_inpatient_cost_cny",
+        }:
+            value = float(
+                value
+            )
+
+            if value < 0:
+                raise ValueError(
+                    "Medical-cost values cannot be negative."
+                )
+
+        elif feature == "gender_label":
+            value = str(
+                value
+            )
+
+            if value not in GENDER_MAPPING:
+                raise ValueError(
+                    "Unsupported gender value."
+                )
+
+        elif feature in {
+            "chronic_illness_label",
+            "smoking_label",
+            "hospitalized_label",
+        }:
+            value = str(
+                value
+            )
+
+            if value not in YES_NO_MAPPING:
+                raise ValueError(
+                    f"Unsupported value for {feature}."
+                )
+
+        elif feature == "health_label":
+            value = str(
+                value
+            )
+
+            if value not in HEALTH_MAPPING:
+                raise ValueError(
+                    "Unsupported self-rated health value."
+                )
+
+        elif feature == "employed_label":
+            value = str(
+                value
+            )
+
+            if value not in EMPLOYMENT_MAPPING:
+                raise ValueError(
+                    "Unsupported employment value."
+                )
+
+        cleaned[
+            feature
+        ] = value
+
+    if not cleaned:
+        raise ValueError(
+            "No supported hypothetical feature change was detected."
+        )
+
+    return cleaned
+
+
+def run_what_if_prediction(
+    *,
+    artifact: dict[str, Any],
+    prediction_context: dict[str, Any],
+    changes: dict[str, Any],
+) -> dict[str, Any]:
+    """
+    Rerun the REAL trained model using hypothetical user changes.
+
+    The previous prediction remains unchanged in session state.
+    """
+
+    original_inputs = prediction_context.get(
+        "raw_inputs"
+    )
+
+    if not original_inputs:
+        raise ValueError(
+            "Raw input values from the original prediction are unavailable. "
+            "Please generate a new prediction first."
+        )
+
+    original_inputs = dict(
+        original_inputs
+    )
+
+    modified_inputs = dict(
+        original_inputs
+    )
+
+    modified_inputs.update(
+        changes
+    )
+
+    # Validate all final values and recalculate BMI.
+    new_bmi = validate_raw_inputs(
+        age=int(
+            modified_inputs["age"]
+        ),
+        height_cm=float(
+            modified_inputs["height_cm"]
+        ),
+        weight_kg=float(
+            modified_inputs["weight_kg"]
+        ),
+        outpatient_cost=float(
+            modified_inputs[
+                "outpatient_cost_cny"
+            ]
+        ),
+        previous_inpatient_cost=float(
+            modified_inputs[
+                "previous_inpatient_cost_cny"
+            ]
+        ),
+    )
+
+    new_model_input = create_original_model_input(
+        required_original_features=artifact[
+            "original_feature_names"
+        ],
+        age=int(
+            modified_inputs["age"]
+        ),
+        gender_code=GENDER_MAPPING[
+            modified_inputs[
+                "gender_label"
+            ]
+        ],
+        height_cm=float(
+            modified_inputs[
+                "height_cm"
+            ]
+        ),
+        weight_kg=float(
+            modified_inputs[
+                "weight_kg"
+            ]
+        ),
+        chronic_code=YES_NO_MAPPING[
+            modified_inputs[
+                "chronic_illness_label"
+            ]
+        ],
+        smoking_code=YES_NO_MAPPING[
+            modified_inputs[
+                "smoking_label"
+            ]
+        ],
+        previous_inpatient_cost=float(
+            modified_inputs[
+                "previous_inpatient_cost_cny"
+            ]
+        ),
+        hospitalized_code=YES_NO_MAPPING[
+            modified_inputs[
+                "hospitalized_label"
+            ]
+        ],
+        outpatient_cost=float(
+            modified_inputs[
+                "outpatient_cost_cny"
+            ]
+        ),
+        health_code=HEALTH_MAPPING[
+            modified_inputs[
+                "health_label"
+            ]
+        ],
+        employed_code=EMPLOYMENT_MAPPING[
+            modified_inputs[
+                "employed_label"
+            ]
+        ],
+    )
+
+    result = predict_medical_cost(
+        artifact=artifact,
+        original_input=new_model_input,
+    )
+
+    new_cost_cny = float(
+        result[
+            "predicted_original_cost"
+        ]
+    )
+
+    currency_code = prediction_context.get(
+        "selected_currency_code",
+        "CNY",
+    )
+
+    exchange_rate = float(
+        prediction_context.get(
+            "exchange_rate",
+            1.0,
+        )
+        or 1.0
+    )
+
+    new_cost_selected = (
+        convert_cny_to_selected_currency(
+            amount_cny=new_cost_cny,
+            target_currency=currency_code,
+            rate_from_cny=exchange_rate,
+        )
+    )
+
+    # Generate SHAP values for the hypothetical result as well.
+    hypothetical_top_factors = []
+
+    try:
+        top_contributors = calculate_top_contributors(
+            artifact=artifact,
+            prediction_result=result,
+            top_n=5,
+        )
+
+        hypothetical_top_factors = [
+            {
+                "feature": str(
+                    row["Feature"]
+                ),
+                "effect": str(
+                    row["Effect"]
+                ),
+                "contribution": float(
+                    row[
+                        "SHAP contribution"
+                    ]
+                ),
+            }
+            for _, row in top_contributors.iterrows()
+        ]
+
+    except Exception:
+        hypothetical_top_factors = []
+
+    return {
+        "changes": dict(
+            changes
+        ),
+        "original_inputs": original_inputs,
+        "modified_inputs": modified_inputs,
+        "bmi": new_bmi,
+        "prediction_result": result,
+        "predicted_log_cost": float(
+            result[
+                "predicted_log_cost"
+            ]
+        ),
+        "predicted_cost_cny": new_cost_cny,
+        "predicted_cost_selected": new_cost_selected,
+        "top_factors": hypothetical_top_factors,
+    }
+
+
+def explain_what_if_prediction(
+    *,
+    original_context: dict[str, Any],
+    what_if_result: dict[str, Any],
+    user_message: str,
+) -> str:
+    """
+    Ask Gemini to explain a prediction that was already calculated
+    by the actual LightGBM + XGBoost pipeline.
+    """
+
+    if not GEMINI_API_KEY:
+        raise RuntimeError(
+            "GEMINI_API_KEY is not configured."
+        )
+
+    client = load_gemini_client(
+        GEMINI_API_KEY
+    )
+
+    old_cost_cny = float(
+        original_context[
+            "predicted_cost_cny"
+        ]
+    )
+
+    new_cost_cny = float(
+        what_if_result[
+            "predicted_cost_cny"
+        ]
+    )
+
+    difference_cny = (
+        new_cost_cny
+        - old_cost_cny
+    )
+
+    percentage_change = (
+        (
+            difference_cny
+            / old_cost_cny
+        )
+        * 100.0
+        if old_cost_cny > 0
+        else 0.0
+    )
+
+    currency_code = original_context.get(
+        "selected_currency_code",
+        "CNY",
+    )
+
+    currency_symbol = original_context.get(
+        "selected_currency_symbol",
+        "¥",
+    )
+
+    old_cost_selected = float(
+        original_context.get(
+            "predicted_cost_selected_currency",
+            old_cost_cny,
+        )
+    )
+
+    new_cost_selected = float(
+        what_if_result[
+            "predicted_cost_selected"
+        ]
+    )
+
+    top_factors = what_if_result.get(
+        "top_factors",
+        [],
+    )
+
+    if top_factors:
+        factor_text = "\n".join(
+            (
+                f"- {item['feature']}: "
+                f"{item['effect']} "
+                f"(SHAP contribution "
+                f"{item['contribution']:.4f})"
+            )
+            for item in top_factors
+        )
+    else:
+        factor_text = (
+            "Hypothetical SHAP factors are unavailable."
+        )
+
+    prompt = f"""
+You are an educational assistant explaining a hypothetical
+machine-learning medical-cost prediction.
+
+IMPORTANT:
+- The numerical predictions below were generated by the actual
+  trained LightGBM + XGBoost model.
+- Do NOT calculate or invent a different prediction.
+- Do NOT claim that changing a feature CAUSES healthcare costs
+  to rise or fall.
+- SHAP describes model behaviour and associations, not causation.
+- Do NOT diagnose illness or recommend treatment.
+- For health-related features such as BMI, weight, smoking, or
+  chronic illness, do not tell the user to change their health
+  solely to reduce a predicted bill.
+- You may explain that the user can simulate alternative values
+  to see how the model responds.
+- Keep the answer concise and easy to understand.
+
+Original prediction:
+- {currency_symbol}{old_cost_selected:,.2f} {currency_code}
+- ¥{old_cost_cny:,.2f} CNY
+
+Hypothetical prediction:
+- {currency_symbol}{new_cost_selected:,.2f} {currency_code}
+- ¥{new_cost_cny:,.2f} CNY
+
+Difference:
+- {difference_cny:+,.2f} CNY
+- {percentage_change:+.2f}%
+
+Requested changes:
+{json.dumps(what_if_result["changes"], ensure_ascii=False)}
+
+Modified BMI:
+{what_if_result["bmi"]:.2f}
+
+Top hypothetical SHAP factors:
+{factor_text}
+
+User question:
+{user_message}
+
+Explain:
+1. what was changed,
+2. the original versus hypothetical prediction,
+3. whether the model output increased or decreased,
+4. that this is a hypothetical model scenario rather than a
+   guaranteed real-world cost outcome.
+"""
+
+    response = client.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=prompt,
+    )
+
+    response_text = getattr(
+        response,
+        "text",
+        None,
+    )
+
+    if not response_text:
+        raise RuntimeError(
+            "Gemini returned an empty what-if explanation."
+        )
+
+    return response_text.strip()
+
+
 def generate_gemini_explanation(
     *,
     prediction_context: dict[str, Any],
@@ -1841,14 +2604,28 @@ regression model trained using historical CFPS survey data.
 Important rules:
 1. Explain the result using simple and understandable language.
 2. State that the prediction is an estimate and not a guaranteed bill.
-3. Explain that SHAP describes model behaviour and does not prove
-   medical causation.
+3. Explain that SHAP describes model behaviour and association and
+   does not prove medical causation.
 4. Do not diagnose illness or recommend treatment.
 5. Do not invent patient details, medical facts, exchange rates,
-   or converted amounts.
-6. Use only the currency values supplied in the context below.
+   converted amounts, SHAP values, or new predictions.
+6. Use only the values supplied in the context below.
 7. Explain that exchange rates can change over time.
-8. Keep the response concise and directly answer the user's question.
+8. If the user asks how the predicted cost could become lower,
+   discuss the SHAP factors that currently increase the MODEL
+   prediction. Phrase them as model-sensitive or associated factors,
+   not guaranteed ways to reduce real healthcare spending.
+9. For BMI, weight, smoking, health, chronic illness, or similar
+   health-related variables, never tell the user to change their
+   health solely to lower a predicted bill. Instead say that a
+   hypothetical value can be simulated to see how the model responds.
+10. For observed spending variables such as outpatient cost, explain
+    that a lower hypothetical value can be simulated, but do not frame
+    necessary medical care as something the user should avoid.
+11. If the user asks for a new hypothetical numerical prediction,
+    do not invent one. That request must be handled by the application's
+    real machine-learning what-if pipeline.
+12. Keep the response concise and directly answer the user's question.
 
 Prediction context:
 - Predicted inpatient cost:
@@ -2221,19 +2998,6 @@ st.write(
 # A placeholder is used so the user must make an explicit selection.
 # ------------------------------------------------------------
 
-st.markdown(
-    """
-    <div style="
-        font-size: 22px;
-        font-weight: 700;
-        margin-bottom: 8px;
-    ">
-        Preferred currency
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
-
 selected_currency_label = st.selectbox(
     "Preferred currency",
     options=list(
@@ -2241,10 +3005,11 @@ selected_currency_label = st.selectbox(
     ),
     index=None,
     placeholder="Select your preferred currency",
-    label_visibility="collapsed",
     help=(
         "Select the currency you want to use for both medical-cost "
-        "inputs and the main prediction display."
+        "inputs and the main prediction display. The application "
+        "converts the monetary inputs to CNY before sending them "
+        "to the machine-learning model."
     ),
 )
 
@@ -2384,7 +3149,7 @@ else:
 
         with health_col2:
             hospitalized_label = st.selectbox(
-                "Hospitalized in the past 6 months",
+                "Hospitalized during the survey period",
                 options=list(
                     YES_NO_MAPPING.keys()
                 ),
@@ -2633,7 +3398,70 @@ if submitted:
             "Prediction completed successfully."
         )
 
-       
+        # ----------------------------------------------------
+        # Show the model-input currency conversion clearly
+        # ----------------------------------------------------
+
+        st.markdown(
+            "#### Medical-cost values used by the model"
+        )
+
+        if selected_currency_code != "CNY":
+            input_conversion_df = pd.DataFrame(
+                {
+                    "Medical-cost input": [
+                        "Current outpatient medical cost",
+                        "Previous inpatient medical cost",
+                    ],
+                    (
+                        f"Entered amount "
+                        f"({selected_currency_code})"
+                    ): [
+                        float(
+                            outpatient_cost_selected
+                        ),
+                        float(
+                            previous_inpatient_cost_selected
+                        ),
+                    ],
+                    "Converted amount (CNY)": [
+                        outpatient_cost_cny,
+                        previous_inpatient_cost_cny,
+                    ],
+                }
+            )
+
+            st.dataframe(
+                input_conversion_df.style.format(
+                    {
+                        (
+                            f"Entered amount "
+                            f"({selected_currency_code})"
+                        ): "{:,.2f}",
+                        "Converted amount (CNY)": "{:,.2f}",
+                    }
+                ),
+                use_container_width=True,
+                hide_index=True,
+            )
+
+            st.caption(
+                "Exchange rate used for both input and output conversion: "
+                f"1 CNY = {exchange_rate:.6f} "
+                f"{selected_currency_code}"
+            )
+
+            if exchange_rate_updated:
+                st.caption(
+                    "Exchange-rate update time: "
+                    f"{exchange_rate_updated}"
+                )
+
+        else:
+            st.info(
+                "CNY was selected, so no currency conversion was "
+                "required before prediction."
+            )
 
         # ----------------------------------------------------
         # 19F. SHOW PREDICTION IN BOTH CURRENCIES
@@ -2808,6 +3636,27 @@ if submitted:
             "exchange_rate": exchange_rate,
             "exchange_rate_updated": exchange_rate_updated,
             "currency_conversion_error": None,
+
+            # Raw values required for Gemini what-if simulation.
+            # Monetary predictors are stored in CNY because this is
+            # the model's training/base currency.
+            "raw_inputs": {
+                "age": int(age),
+                "gender_label": gender_label,
+                "height_cm": float(height_cm),
+                "weight_kg": float(weight_kg),
+                "chronic_illness_label": chronic_illness_label,
+                "smoking_label": smoking_label,
+                "hospitalized_label": hospitalized_label,
+                "health_label": health_label,
+                "employed_label": employed_label,
+                "outpatient_cost_cny": float(
+                    outpatient_cost_cny
+                ),
+                "previous_inpatient_cost_cny": float(
+                    previous_inpatient_cost_cny
+                ),
+            },
 
             "age": int(age),
             "bmi": validated_bmi,
@@ -3105,7 +3954,8 @@ with st.container(
         )
 
         st.caption(
-            "Ask about the latest prediction or its model factors. "
+            "Ask about the latest prediction, SHAP factors, or try a "
+            "what-if scenario such as 'What if my weight is 45 kg?' "
             "The assistant does not provide diagnosis or treatment advice."
         )
 
@@ -3201,7 +4051,7 @@ with st.container(
             chat_question = st.text_input(
                 "Message",
                 placeholder=(
-                    "Ask why the predicted cost is high or low..."
+                    "Ask why the cost is high, or: What if my weight is 45 kg?"
                 ),
                 label_visibility="collapsed",
             )
@@ -3278,19 +4128,80 @@ with st.container(
 
             else:
                 try:
-                    assistant_response = (
-                        generate_gemini_explanation(
-                            prediction_context=(
-                                st.session_state
-                                .latest_prediction_context
-                            ),
-                            user_message=clean_question,
-                        )
+                    current_context = (
+                        st.session_state
+                        .latest_prediction_context
                     )
+
+                    intent_result = detect_chat_intent(
+                        user_message=clean_question,
+                        prediction_context=current_context,
+                    )
+
+                    intent = intent_result.get(
+                        "intent",
+                        "explanation",
+                    )
+
+                    extracted_changes = intent_result.get(
+                        "changes",
+                        {},
+                    )
+
+                    if intent == "what_if":
+
+                        # Convert any hypothetical cost values supplied
+                        # in the user's preferred currency back to CNY.
+                        converted_changes = (
+                            convert_what_if_currency_changes(
+                                changes=extracted_changes,
+                                prediction_context=current_context,
+                            )
+                        )
+
+                        cleaned_changes = (
+                            validate_what_if_changes(
+                                converted_changes
+                            )
+                        )
+
+                        what_if_result = (
+                            run_what_if_prediction(
+                                artifact=artifact,
+                                prediction_context=(
+                                    current_context
+                                ),
+                                changes=cleaned_changes,
+                            )
+                        )
+
+                        assistant_response = (
+                            explain_what_if_prediction(
+                                original_context=(
+                                    current_context
+                                ),
+                                what_if_result=(
+                                    what_if_result
+                                ),
+                                user_message=(
+                                    clean_question
+                                ),
+                            )
+                        )
+
+                    else:
+                        assistant_response = (
+                            generate_gemini_explanation(
+                                prediction_context=(
+                                    current_context
+                                ),
+                                user_message=clean_question,
+                            )
+                        )
 
                 except Exception as error:
                     assistant_response = (
-                        "The assistant could not generate a response: "
+                        "The assistant could not process this request: "
                         f"{error}"
                     )
 
