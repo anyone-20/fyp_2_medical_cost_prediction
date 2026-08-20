@@ -2621,70 +2621,7 @@ if submitted:
             "Prediction completed successfully."
         )
 
-        # ----------------------------------------------------
-        # Show the model-input currency conversion clearly
-        # ----------------------------------------------------
-
-        st.markdown(
-            "#### Medical-cost values used by the model"
-        )
-
-        if selected_currency_code != "CNY":
-            input_conversion_df = pd.DataFrame(
-                {
-                    "Medical-cost input": [
-                        "Current outpatient medical cost",
-                        "Previous inpatient medical cost",
-                    ],
-                    (
-                        f"Entered amount "
-                        f"({selected_currency_code})"
-                    ): [
-                        float(
-                            outpatient_cost_selected
-                        ),
-                        float(
-                            previous_inpatient_cost_selected
-                        ),
-                    ],
-                    "Converted amount (CNY)": [
-                        outpatient_cost_cny,
-                        previous_inpatient_cost_cny,
-                    ],
-                }
-            )
-
-            st.dataframe(
-                input_conversion_df.style.format(
-                    {
-                        (
-                            f"Entered amount "
-                            f"({selected_currency_code})"
-                        ): "{:,.2f}",
-                        "Converted amount (CNY)": "{:,.2f}",
-                    }
-                ),
-                use_container_width=True,
-                hide_index=True,
-            )
-
-            st.caption(
-                "Exchange rate used for both input and output conversion: "
-                f"1 CNY = {exchange_rate:.6f} "
-                f"{selected_currency_code}"
-            )
-
-            if exchange_rate_updated:
-                st.caption(
-                    "Exchange-rate update time: "
-                    f"{exchange_rate_updated}"
-                )
-
-        else:
-            st.info(
-                "CNY was selected, so no currency conversion was "
-                "required before prediction."
-            )
+       
 
         # ----------------------------------------------------
         # 19F. SHOW PREDICTION IN BOTH CURRENCIES
