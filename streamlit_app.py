@@ -2372,7 +2372,7 @@ else:
 
         with health_col2:
             hospitalized_label = st.selectbox(
-                "Hospitalized during the survey period",
+                "Hospitalized in the past 6 months",
                 options=list(
                     YES_NO_MAPPING.keys()
                 ),
