@@ -1455,7 +1455,14 @@ def get_exchange_rates(
     api_key: str,
     base_currency: str = "CNY",
 ) -> dict[str, Any]:
-    """Retrieve exchange rates and cache them for one hour."""
+    """
+    Retrieve exchange rates and cache them for one hour.
+
+    The application intentionally requests rates with CNY as the
+    base currency so the SAME rate can be used for:
+      1. User-selected currency -> CNY model input
+      2. CNY model prediction -> user-selected currency output
+    """
 
     if not api_key:
         raise ValueError(
@@ -1471,7 +1478,6 @@ def get_exchange_rates(
         url,
         timeout=10,
     )
-
     response.raise_for_status()
 
     data = response.json()
@@ -1500,27 +1506,37 @@ def get_exchange_rates(
     }
 
 
-def convert_cny_amount(
+def get_currency_rate_from_cny(
     *,
-    amount_cny: float,
     target_currency: str,
     api_key: str | None,
 ) -> dict[str, Any]:
-    """Convert a CNY amount to the selected display currency."""
+    """
+    Return the rate expressed as:
+
+        1 CNY = rate × target_currency
+
+    Example:
+        1 CNY = 0.65 MYR
+
+    This single rate is used in both directions so the user's input
+    conversion and the displayed prediction remain consistent.
+    """
+
+    target_currency = str(
+        target_currency
+    ).upper().strip()
 
     if target_currency == "CNY":
         return {
             "rate": 1.0,
-            "converted_amount": float(
-                amount_cny
-            ),
             "last_updated": None,
         }
 
     if not api_key:
         raise ValueError(
-            "EXCHANGE_RATE_API_KEY was not found in "
-            "Streamlit Secrets."
+            "EXCHANGE_RATE_API_KEY was not found. "
+            "Configure it in the Streamlit environment or Secrets."
         )
 
     rate_data = get_exchange_rates(
@@ -1539,12 +1555,113 @@ def convert_cny_amount(
         rates[target_currency]
     )
 
+    if rate <= 0:
+        raise ValueError(
+            f"Invalid exchange rate returned for {target_currency}."
+        )
+
     return {
         "rate": rate,
-        "converted_amount": float(
-            amount_cny
-        ) * rate,
         "last_updated": rate_data[
+            "last_updated"
+        ],
+    }
+
+
+def convert_selected_currency_to_cny(
+    *,
+    amount: float,
+    source_currency: str,
+    rate_from_cny: float,
+) -> float:
+    """
+    Convert a user-entered amount into CNY.
+
+    If:
+        1 CNY = rate_from_cny × source_currency
+
+    then:
+        CNY = source_currency_amount / rate_from_cny
+    """
+
+    amount = float(amount)
+    rate_from_cny = float(rate_from_cny)
+
+    if amount < 0:
+        raise ValueError(
+            "Currency amounts cannot be negative."
+        )
+
+    if source_currency == "CNY":
+        return amount
+
+    if rate_from_cny <= 0:
+        raise ValueError(
+            "The exchange rate must be greater than zero."
+        )
+
+    return float(
+        amount / rate_from_cny
+    )
+
+
+def convert_cny_to_selected_currency(
+    *,
+    amount_cny: float,
+    target_currency: str,
+    rate_from_cny: float,
+) -> float:
+    """
+    Convert a CNY amount into the user's selected currency.
+    """
+
+    amount_cny = float(amount_cny)
+    rate_from_cny = float(rate_from_cny)
+
+    if amount_cny < 0:
+        raise ValueError(
+            "Currency amounts cannot be negative."
+        )
+
+    if target_currency == "CNY":
+        return amount_cny
+
+    if rate_from_cny <= 0:
+        raise ValueError(
+            "The exchange rate must be greater than zero."
+        )
+
+    return float(
+        amount_cny * rate_from_cny
+    )
+
+
+# Backward-compatible helper used by any older section of the app.
+def convert_cny_amount(
+    *,
+    amount_cny: float,
+    target_currency: str,
+    api_key: str | None,
+) -> dict[str, Any]:
+    """Convert a CNY amount to a selected display currency."""
+
+    rate_info = get_currency_rate_from_cny(
+        target_currency=target_currency,
+        api_key=api_key,
+    )
+
+    converted_amount = (
+        convert_cny_to_selected_currency(
+            amount_cny=amount_cny,
+            target_currency=target_currency,
+            rate_from_cny=rate_info["rate"],
+        )
+    )
+
+    return {
+        "rate": rate_info["rate"],
+        "converted_amount": converted_amount,
+        "last_updated": rate_info[
             "last_updated"
         ],
     }
@@ -1640,15 +1757,49 @@ def generate_gemini_explanation(
         "currency_conversion_error"
     )
 
+    outpatient_input_selected = prediction_context.get(
+        "outpatient_cost_selected_currency"
+    )
+    previous_input_selected = prediction_context.get(
+        "previous_inpatient_cost_selected_currency"
+    )
+    outpatient_input_cny = prediction_context.get(
+        "outpatient_cost_cny"
+    )
+    previous_input_cny = prediction_context.get(
+        "previous_inpatient_cost_cny"
+    )
+
+    input_currency_context = (
+        f"- Current outpatient input: "
+        f"{currency_symbol}{outpatient_input_selected:,.2f} "
+        f"{currency_code} -> "
+        f"¥{outpatient_input_cny:,.2f} CNY\n"
+        f"- Previous inpatient input: "
+        f"{currency_symbol}{previous_input_selected:,.2f} "
+        f"{currency_code} -> "
+        f"¥{previous_input_cny:,.2f} CNY"
+        if (
+            outpatient_input_selected is not None
+            and previous_input_selected is not None
+            and outpatient_input_cny is not None
+            and previous_input_cny is not None
+        )
+        else "- Input currency-conversion details are unavailable."
+    )
+
     if (
         converted_cost is not None
         and currency_code != "CNY"
         and exchange_rate is not None
     ):
         currency_context = (
-            f"- Converted estimated cost: "
+            f"{input_currency_context}\n"
+            f"- Predicted cost in selected currency: "
             f"{currency_symbol}{converted_cost:,.2f} "
             f"{currency_code}\n"
+            f"- Prediction in model base currency: "
+            f"¥{prediction_context['predicted_cost_cny']:,.2f} CNY\n"
             f"- Exchange rate used: "
             f"1 CNY = {exchange_rate:.6f} "
             f"{currency_code}\n"
@@ -1658,7 +1809,8 @@ def generate_gemini_explanation(
 
     elif currency_code == "CNY":
         currency_context = (
-            "- No currency conversion was required because "
+            f"{input_currency_context}\n"
+            "- No exchange-rate conversion was required because "
             "the selected currency is CNY."
         )
 
@@ -2053,209 +2205,262 @@ st.subheader(
 )
 
 st.write(
-    "Enter all required personal, health, employment, and "
-    "medical-cost information in the section below."
+    "Choose your preferred currency first. Then enter all required "
+    "personal, health, employment, and medical-cost information."
 )
 
+# ------------------------------------------------------------
+# 18A. CURRENCY MUST BE SELECTED BEFORE THE FORM IS DISPLAYED
+# ------------------------------------------------------------
+#
+# This selectbox is intentionally OUTSIDE st.form().
+# Streamlit widgets inside a form do not trigger an immediate rerun,
+# so putting the currency selector inside the form would prevent the
+# cost-field labels from updating as soon as the user changes currency.
+#
+# A placeholder is used so the user must make an explicit selection.
+# ------------------------------------------------------------
 
-with st.form(
-    "medical_cost_form"
-):
-    st.markdown(
-        "#### Personal information"
-    )
+selected_currency_label = st.selectbox(
+    "Preferred currency",
+    options=list(
+        CURRENCY_OPTIONS.keys()
+    ),
+    index=None,
+    placeholder="Select your preferred currency",
+    help=(
+        "Select the currency you want to use for both medical-cost "
+        "inputs and the main prediction display. The application "
+        "converts the monetary inputs to CNY before sending them "
+        "to the machine-learning model."
+    ),
+)
 
-    personal_col1, personal_col2 = st.columns(
-        2
-    )
-
-    with personal_col1:
-        age = st.number_input(
-            "Age",
-            min_value=1,
-            max_value=119,
-            value=40,
-            step=1,
-            help=(
-                "Enter the individual's age in completed years."
-            ),
-        )
-
-        gender_label = st.selectbox(
-            "Gender",
-            options=list(
-                GENDER_MAPPING.keys()
-            ),
-            help=(
-                "Select the gender category used by the model."
-            ),
-        )
-
-    with personal_col2:
-        height_cm = st.number_input(
-            "Height (cm)",
-            min_value=50.0,
-            max_value=250.0,
-            value=165.0,
-            step=0.1,
-            help=(
-                "Height is used together with weight to calculate BMI."
-            ),
-        )
-
-        weight_kg = st.number_input(
-            "Weight (kg)",
-            min_value=10.0,
-            max_value=300.0,
-            value=60.0,
-            step=0.1,
-            help=(
-                "Weight is used together with height to calculate BMI."
-            ),
-        )
-
-    calculated_bmi = float(
-        weight_kg
-        / ((height_cm / 100.0) ** 2)
-    )
-
-    bmi_status = (
-        "Underweight"
-        if calculated_bmi < 18.5
-        else "Normal range"
-        if calculated_bmi < 25
-        else "Overweight"
-        if calculated_bmi < 30
-        else "High BMI"
-    )
-
+if selected_currency_label is None:
     st.info(
-        f"Calculated BMI: **{calculated_bmi:.2f}** "
-        f"({bmi_status})"
+        "Please select your preferred currency before entering "
+        "medical-cost values."
+    )
+    submitted = False
+
+else:
+    selected_currency = CURRENCY_OPTIONS[
+        selected_currency_label
+    ]
+
+    selected_currency_code = selected_currency[
+        "code"
+    ]
+    selected_currency_symbol = selected_currency[
+        "symbol"
+    ]
+
+    st.caption(
+        "Selected currency: "
+        f"{selected_currency_label}. "
+        "Medical-cost inputs will be converted to CNY before "
+        "feature engineering and model prediction."
     )
 
-    st.divider()
+    with st.form(
+        "medical_cost_form"
+    ):
+        st.markdown(
+            "#### Personal information"
+        )
 
-    st.markdown(
-        "#### Health and lifestyle information"
-    )
+        personal_col1, personal_col2 = st.columns(
+            2
+        )
 
-    health_col1, health_col2 = st.columns(
-        2
-    )
+        with personal_col1:
+            age = st.number_input(
+                "Age",
+                min_value=1,
+                max_value=119,
+                value=40,
+                step=1,
+                help=(
+                    "Enter the individual's age in completed years."
+                ),
+            )
 
-    with health_col1:
-        chronic_illness_label = st.selectbox(
-            "Chronic illness diagnosis",
+            gender_label = st.selectbox(
+                "Gender",
+                options=list(
+                    GENDER_MAPPING.keys()
+                ),
+                help=(
+                    "Select the gender category used by the model."
+                ),
+            )
+
+        with personal_col2:
+            height_cm = st.number_input(
+                "Height (cm)",
+                min_value=50.0,
+                max_value=250.0,
+                value=165.0,
+                step=0.1,
+                help=(
+                    "Height is used together with weight to calculate BMI."
+                ),
+            )
+
+            weight_kg = st.number_input(
+                "Weight (kg)",
+                min_value=10.0,
+                max_value=300.0,
+                value=60.0,
+                step=0.1,
+                help=(
+                    "Weight is used together with height to calculate BMI."
+                ),
+            )
+
+        calculated_bmi = float(
+            weight_kg
+            / ((height_cm / 100.0) ** 2)
+        )
+
+        bmi_status = (
+            "Underweight"
+            if calculated_bmi < 18.5
+            else "Normal range"
+            if calculated_bmi < 25
+            else "Overweight"
+            if calculated_bmi < 30
+            else "High BMI"
+        )
+
+        st.info(
+            f"Calculated BMI: **{calculated_bmi:.2f}** "
+            f"({bmi_status})"
+        )
+
+        st.divider()
+
+        st.markdown(
+            "#### Health and lifestyle information"
+        )
+
+        health_col1, health_col2 = st.columns(
+            2
+        )
+
+        with health_col1:
+            chronic_illness_label = st.selectbox(
+                "Chronic illness diagnosis",
+                options=list(
+                    YES_NO_MAPPING.keys()
+                ),
+                help=(
+                    "Whether the individual has been diagnosed "
+                    "with a chronic illness."
+                ),
+            )
+
+            smoking_label = st.selectbox(
+                "Smoking status",
+                options=list(
+                    YES_NO_MAPPING.keys()
+                ),
+                help=(
+                    "Whether the individual currently smokes."
+                ),
+            )
+
+        with health_col2:
+            hospitalized_label = st.selectbox(
+                "Hospitalized during the survey period",
+                options=list(
+                    YES_NO_MAPPING.keys()
+                ),
+                help=(
+                    "Whether the individual was hospitalized "
+                    "during the relevant survey period."
+                ),
+            )
+
+            health_label = st.selectbox(
+                "Self-rated health",
+                options=list(
+                    HEALTH_MAPPING.keys()
+                ),
+                index=2,
+                help=(
+                    "Select the individual's own assessment "
+                    "of their current health."
+                ),
+            )
+
+        employed_label = st.selectbox(
+            "Employment status",
             options=list(
-                YES_NO_MAPPING.keys()
+                EMPLOYMENT_MAPPING.keys()
             ),
             help=(
-                "Whether the individual has been diagnosed "
-                "with a chronic illness."
+                "Select whether the individual is currently employed."
             ),
         )
 
-        smoking_label = st.selectbox(
-            "Smoking status",
-            options=list(
-                YES_NO_MAPPING.keys()
-            ),
-            help=(
-                "Whether the individual currently smokes."
-            ),
+        st.divider()
+
+        st.markdown(
+            "#### Medical-cost information"
         )
 
-    with health_col2:
-        hospitalized_label = st.selectbox(
-            "Hospitalized during the survey period",
-            options=list(
-                YES_NO_MAPPING.keys()
-            ),
-            help=(
-                "Whether the individual was hospitalized "
-                "during the relevant survey period."
-            ),
+        st.caption(
+            "Enter both amounts in "
+            f"{selected_currency_label}. "
+            "They will be converted to CNY automatically before "
+            "the model applies log1p and interaction-feature rules."
         )
 
-        health_label = st.selectbox(
-            "Self-rated health",
-            options=list(
-                HEALTH_MAPPING.keys()
-            ),
-            index=2,
-            help=(
-                "Select the individual's own assessment "
-                "of their current health."
-            ),
+        cost_col1, cost_col2 = st.columns(
+            2
         )
 
-    employed_label = st.selectbox(
-        "Employment status",
-        options=list(
-            EMPLOYMENT_MAPPING.keys()
-        ),
-        help=(
-            "Select whether the individual is currently employed."
-        ),
-    )
+        with cost_col1:
+            outpatient_cost_selected = st.number_input(
+                (
+                    "Current outpatient medical cost "
+                    f"({selected_currency_code})"
+                ),
+                min_value=0.0,
+                value=0.0,
+                step=100.0,
+                help=(
+                    "Enter current outpatient medical spending in "
+                    f"{selected_currency_label}."
+                ),
+            )
 
-    st.divider()
+        with cost_col2:
+            previous_inpatient_cost_selected = st.number_input(
+                (
+                    "Previous inpatient medical cost "
+                    f"({selected_currency_code})"
+                ),
+                min_value=0.0,
+                value=0.0,
+                step=100.0,
+                help=(
+                    "Enter previous inpatient medical spending in "
+                    f"{selected_currency_label}."
+                ),
+            )
 
-    st.markdown(
-        "#### Medical-cost information"
-    )
-
-    cost_col1, cost_col2 = st.columns(
-        2
-    )
-
-    with cost_col1:
-        outpatient_cost = st.number_input(
-            "Current outpatient medical cost (CNY)",
-            min_value=0.0,
-            value=0.0,
-            step=100.0,
-            help=(
-                "Enter outpatient medical spending for the "
-                "current survey period."
-            ),
+        st.warning(
+            "Review all entered values before submitting. "
+            "The prediction is an estimate derived from historical data."
         )
 
-    with cost_col2:
-        previous_inpatient_cost = st.number_input(
-            "Previous inpatient medical cost (CNY)",
-            min_value=0.0,
-            value=0.0,
-            step=100.0,
-            help=(
-                "Enter inpatient medical spending from the "
-                "previous survey period."
-            ),
+        submitted = st.form_submit_button(
+            "✨ Predict inpatient medical cost",
+            use_container_width=True,
+            type="primary",
         )
-
-    selected_currency_label = st.selectbox(
-        "Display the prediction in",
-        options=list(
-            CURRENCY_OPTIONS.keys()
-        ),
-        index=1,
-        help=(
-            "The model always predicts in CNY. Other currencies "
-            "are approximate display conversions."
-        ),
-    )
-
-    st.warning(
-        "Review all entered values before submitting. "
-        "The prediction is an estimate derived from historical data."
-    )
-
-    submitted = st.form_submit_button(
-        "✨ Predict inpatient medical cost",
-        use_container_width=True,
-        type="primary",
-    )
 
 
 # ============================================================
@@ -2264,17 +2469,89 @@ with st.form(
 
 if submitted:
     try:
+        # ----------------------------------------------------
+        # 19A. GET ONE EXCHANGE RATE FOR THE WHOLE PREDICTION
+        # ----------------------------------------------------
+        #
+        # The same rate is used for:
+        #   selected currency -> CNY inputs
+        #   CNY prediction -> selected currency output
+        #
+        # This avoids using two slightly different rates within
+        # one prediction.
+        # ----------------------------------------------------
+
+        rate_info = get_currency_rate_from_cny(
+            target_currency=selected_currency_code,
+            api_key=EXCHANGE_RATE_API_KEY,
+        )
+
+        exchange_rate = float(
+            rate_info["rate"]
+        )
+        exchange_rate_updated = rate_info[
+            "last_updated"
+        ]
+
+        # ----------------------------------------------------
+        # 19B. CONVERT BOTH USER COST INPUTS TO CNY FIRST
+        # ----------------------------------------------------
+
+        outpatient_cost_cny = (
+            convert_selected_currency_to_cny(
+                amount=float(
+                    outpatient_cost_selected
+                ),
+                source_currency=(
+                    selected_currency_code
+                ),
+                rate_from_cny=exchange_rate,
+            )
+        )
+
+        previous_inpatient_cost_cny = (
+            convert_selected_currency_to_cny(
+                amount=float(
+                    previous_inpatient_cost_selected
+                ),
+                source_currency=(
+                    selected_currency_code
+                ),
+                rate_from_cny=exchange_rate,
+            )
+        )
+
+        # ----------------------------------------------------
+        # 19C. VALIDATE THE VALUES THAT WILL ACTUALLY ENTER
+        #      THE MODEL (CNY)
+        # ----------------------------------------------------
+
         validated_bmi = validate_raw_inputs(
             age=int(age),
             height_cm=float(height_cm),
             weight_kg=float(weight_kg),
             outpatient_cost=float(
-                outpatient_cost
+                outpatient_cost_cny
             ),
             previous_inpatient_cost=float(
-                previous_inpatient_cost
+                previous_inpatient_cost_cny
             ),
         )
+
+        # ----------------------------------------------------
+        # 19D. BUILD MODEL INPUT USING CNY VALUES
+        # ----------------------------------------------------
+        #
+        # create_feature_candidates() later applies np.log1p().
+        # Therefore the correct sequence is:
+        #
+        # selected currency
+        # -> CNY
+        # -> log1p(CNY)
+        # -> interaction features
+        # -> LightGBM/XGBoost
+        #
+        # ----------------------------------------------------
 
         model_input = create_original_model_input(
             required_original_features=artifact[
@@ -2293,13 +2570,13 @@ if submitted:
                 smoking_label
             ],
             previous_inpatient_cost=float(
-                previous_inpatient_cost
+                previous_inpatient_cost_cny
             ),
             hospitalized_code=YES_NO_MAPPING[
                 hospitalized_label
             ],
             outpatient_cost=float(
-                outpatient_cost
+                outpatient_cost_cny
             ),
             health_code=HEALTH_MAPPING[
                 health_label
@@ -2326,72 +2603,142 @@ if submitted:
             ]
         )
 
-        selected_currency = (
-            CURRENCY_OPTIONS[
-                selected_currency_label
-            ]
-        )
+        # ----------------------------------------------------
+        # 19E. CONVERT CNY PREDICTION BACK TO USER CURRENCY
+        # ----------------------------------------------------
 
-        currency_result = None
-        currency_error = None
-
-        try:
-            currency_result = convert_cny_amount(
+        predicted_cost_selected = (
+            convert_cny_to_selected_currency(
                 amount_cny=predicted_cost_cny,
-                target_currency=selected_currency[
-                    "code"
-                ],
-                api_key=EXCHANGE_RATE_API_KEY,
+                target_currency=(
+                    selected_currency_code
+                ),
+                rate_from_cny=exchange_rate,
             )
-
-        except Exception as error:
-            currency_error = str(error)
+        )
 
         st.success(
             "Prediction completed successfully."
         )
 
-        st.metric(
-            "Estimated inpatient medical cost",
-            f"¥{predicted_cost_cny:,.2f} CNY",
+        # ----------------------------------------------------
+        # Show the model-input currency conversion clearly
+        # ----------------------------------------------------
+
+        st.markdown(
+            "#### Medical-cost values used by the model"
         )
 
-        if (
-            currency_result is not None
-            and selected_currency["code"]
-            != "CNY"
-        ):
-            st.metric(
-                "Approximate converted cost",
-                (
-                    f"{selected_currency['symbol']}"
-                    f"{currency_result['converted_amount']:,.2f} "
-                    f"{selected_currency['code']}"
+        if selected_currency_code != "CNY":
+            input_conversion_df = pd.DataFrame(
+                {
+                    "Medical-cost input": [
+                        "Current outpatient medical cost",
+                        "Previous inpatient medical cost",
+                    ],
+                    (
+                        f"Entered amount "
+                        f"({selected_currency_code})"
+                    ): [
+                        float(
+                            outpatient_cost_selected
+                        ),
+                        float(
+                            previous_inpatient_cost_selected
+                        ),
+                    ],
+                    "Converted amount (CNY)": [
+                        outpatient_cost_cny,
+                        previous_inpatient_cost_cny,
+                    ],
+                }
+            )
+
+            st.dataframe(
+                input_conversion_df.style.format(
+                    {
+                        (
+                            f"Entered amount "
+                            f"({selected_currency_code})"
+                        ): "{:,.2f}",
+                        "Converted amount (CNY)": "{:,.2f}",
+                    }
                 ),
+                use_container_width=True,
+                hide_index=True,
             )
 
             st.caption(
-                "Exchange rate used: "
-                f"1 CNY = {currency_result['rate']:.6f} "
-                f"{selected_currency['code']}"
+                "Exchange rate used for both input and output conversion: "
+                f"1 CNY = {exchange_rate:.6f} "
+                f"{selected_currency_code}"
             )
 
-            if currency_result[
-                "last_updated"
-            ]:
+            if exchange_rate_updated:
                 st.caption(
                     "Exchange-rate update time: "
-                    f"{currency_result['last_updated']}"
+                    f"{exchange_rate_updated}"
                 )
 
-        elif currency_error:
-            st.warning(
-                "The model prediction succeeded, but currency "
-                "conversion was unavailable: "
-                f"{currency_error}"
+        else:
+            st.info(
+                "CNY was selected, so no currency conversion was "
+                "required before prediction."
             )
 
-     
+        # ----------------------------------------------------
+        # 19F. SHOW PREDICTION IN BOTH CURRENCIES
+        # ----------------------------------------------------
+
+        st.markdown(
+            "#### Predicted inpatient medical cost"
+        )
+
+        if selected_currency_code == "CNY":
+            st.metric(
+                "Prediction (CNY)",
+                f"¥{predicted_cost_cny:,.2f} CNY",
+            )
+
+        else:
+            result_col1, result_col2 = st.columns(
+                2
+            )
+
+            with result_col1:
+                st.metric(
+                    (
+                        "Prediction in your selected "
+                        f"currency ({selected_currency_code})"
+                    ),
+                    (
+                        f"{selected_currency_symbol}"
+                        f"{predicted_cost_selected:,.2f} "
+                        f"{selected_currency_code}"
+                    ),
+                )
+
+            with result_col2:
+                st.metric(
+                    "Prediction in model base currency (CNY)",
+                    f"¥{predicted_cost_cny:,.2f} CNY",
+                )
+
+            st.caption(
+                "The machine-learning model predicts on the CNY scale. "
+                "The selected-currency value is a conversion of the "
+                "same prediction."
+            )
+
+        # A compatibility dictionary keeps the older Gemini logic and
+        # any downstream code that expects currency_result working.
+        currency_result = {
+            "rate": exchange_rate,
+            "converted_amount": predicted_cost_selected,
+            "last_updated": exchange_rate_updated,
+        }
+        currency_error = None
+
         # ----------------------------------------------------
         # SHAP explanations
         # ----------------------------------------------------
@@ -2486,42 +2833,44 @@ if submitted:
         # ----------------------------------------------------
 
         st.session_state.latest_prediction_context = {
-    "predicted_cost_cny": predicted_cost_cny,
-    "predicted_log_cost": predicted_log_cost,
+            "predicted_cost_cny": predicted_cost_cny,
+            "predicted_log_cost": predicted_log_cost,
 
-    "selected_currency_code": selected_currency["code"],
-    "selected_currency_symbol": selected_currency["symbol"],
+            "selected_currency_label": selected_currency_label,
+            "selected_currency_code": selected_currency_code,
+            "selected_currency_symbol": selected_currency_symbol,
 
-    "converted_cost": (
-        currency_result["converted_amount"]
-        if currency_result is not None
-        else None
-    ),
+            "converted_cost": predicted_cost_selected,
+            "predicted_cost_selected_currency": (
+                predicted_cost_selected
+            ),
 
-    "exchange_rate": (
-        currency_result["rate"]
-        if currency_result is not None
-        else None
-    ),
+            "outpatient_cost_selected_currency": float(
+                outpatient_cost_selected
+            ),
+            "previous_inpatient_cost_selected_currency": float(
+                previous_inpatient_cost_selected
+            ),
+            "outpatient_cost_cny": outpatient_cost_cny,
+            "previous_inpatient_cost_cny": (
+                previous_inpatient_cost_cny
+            ),
 
-    "exchange_rate_updated": (
-        currency_result["last_updated"]
-        if currency_result is not None
-        else None
-    ),
+            "exchange_rate": exchange_rate,
+            "exchange_rate_updated": exchange_rate_updated,
+            "currency_conversion_error": None,
 
-    "currency_conversion_error": currency_error,
+            "age": int(age),
+            "bmi": validated_bmi,
+            "gender": gender_label,
+            "chronic_illness": chronic_illness_label,
+            "smoking_status": smoking_label,
+            "hospitalized": hospitalized_label,
+            "health_status": health_label,
+            "employment_status": employed_label,
+            "top_factors": top_factor_context,
+        }
 
-    "age": int(age),
-    "bmi": validated_bmi,
-    "gender": gender_label,
-    "chronic_illness": chronic_illness_label,
-    "smoking_status": smoking_label,
-    "hospitalized": hospitalized_label,
-    "health_status": health_label,
-    "employment_status": employed_label,
-    "top_factors": top_factor_context,
-}
         # ----------------------------------------------------
         # Prediction verification
         # ----------------------------------------------------
@@ -2558,14 +2907,30 @@ if submitted:
                     "Test": [
                         "Blending formula",
                         "Log-to-original conversion",
+                        "Outpatient input currency conversion",
+                        "Previous inpatient input currency conversion",
                     ],
                     "Expected result": [
                         manual_blend,
                         retransformed_cost,
+                        (
+                            float(outpatient_cost_selected)
+                            / exchange_rate
+                            if selected_currency_code != "CNY"
+                            else float(outpatient_cost_selected)
+                        ),
+                        (
+                            float(previous_inpatient_cost_selected)
+                            / exchange_rate
+                            if selected_currency_code != "CNY"
+                            else float(previous_inpatient_cost_selected)
+                        ),
                     ],
                     "Application result": [
                         predicted_log_cost,
                         predicted_cost_cny,
+                        outpatient_cost_cny,
+                        previous_inpatient_cost_cny,
                     ],
                     "Status": [
                         (
@@ -2588,6 +2953,36 @@ if submitted:
                             )
                             else "Fail"
                         ),
+                        (
+                            "Pass"
+                            if np.isclose(
+                                (
+                                    float(outpatient_cost_selected)
+                                    / exchange_rate
+                                    if selected_currency_code != "CNY"
+                                    else float(outpatient_cost_selected)
+                                ),
+                                outpatient_cost_cny,
+                                rtol=1e-12,
+                                atol=1e-12,
+                            )
+                            else "Fail"
+                        ),
+                        (
+                            "Pass"
+                            if np.isclose(
+                                (
+                                    float(previous_inpatient_cost_selected)
+                                    / exchange_rate
+                                    if selected_currency_code != "CNY"
+                                    else float(previous_inpatient_cost_selected)
+                                ),
+                                previous_inpatient_cost_cny,
+                                rtol=1e-12,
+                                atol=1e-12,
+                            )
+                            else "Fail"
+                        ),
                     ],
                 }
             )
@@ -2597,8 +2992,6 @@ if submitted:
                 use_container_width=True,
                 hide_index=True,
             )
-
-
 
         # ----------------------------------------------------
         # Technical details
@@ -2615,6 +3008,47 @@ if submitted:
             st.write(
                 "Required original features:",
                 artifact["original_feature_names"],
+            )
+
+            st.write(
+                "Selected input/output currency:",
+                selected_currency_code,
+            )
+
+            st.write(
+                "Exchange rate used:",
+                (
+                    f"1 CNY = {exchange_rate:.6f} "
+                    f"{selected_currency_code}"
+                ),
+            )
+
+            st.write(
+                "Current outpatient cost entered by user:",
+                (
+                    f"{selected_currency_symbol}"
+                    f"{float(outpatient_cost_selected):,.2f} "
+                    f"{selected_currency_code}"
+                ),
+            )
+
+            st.write(
+                "Current outpatient cost sent to model:",
+                f"¥{outpatient_cost_cny:,.2f} CNY",
+            )
+
+            st.write(
+                "Previous inpatient cost entered by user:",
+                (
+                    f"{selected_currency_symbol}"
+                    f"{float(previous_inpatient_cost_selected):,.2f} "
+                    f"{selected_currency_code}"
+                ),
+            )
+
+            st.write(
+                "Previous inpatient cost sent to model:",
+                f"¥{previous_inpatient_cost_cny:,.2f} CNY",
             )
 
             st.write(
@@ -2647,8 +3081,16 @@ if submitted:
             )
 
             st.write(
-                "Original-scale prediction:",
+                "Original-scale prediction (CNY):",
                 predicted_cost_cny,
+            )
+
+            st.write(
+                (
+                    "Converted prediction "
+                    f"({selected_currency_code}):"
+                ),
+                predicted_cost_selected,
             )
 
             st.write(
@@ -2690,7 +3132,7 @@ if submitted:
 
         st.exception(error)
 
- 
+
 # ============================================================
 # 20. FLOATING GEMINI CHATBOT
 # ============================================================
@@ -2727,15 +3169,50 @@ with st.container(
             )
 
         else:
-            latest_cost = (
-                st.session_state.latest_prediction_context[
+            latest_context = (
+                st.session_state.latest_prediction_context
+            )
+
+            latest_cost_cny = float(
+                latest_context[
                     "predicted_cost_cny"
                 ]
             )
 
-            st.success(
-                f"Latest prediction: ¥{latest_cost:,.2f} CNY"
+            latest_currency_code = (
+                latest_context.get(
+                    "selected_currency_code",
+                    "CNY",
+                )
             )
+
+            latest_currency_symbol = (
+                latest_context.get(
+                    "selected_currency_symbol",
+                    "¥",
+                )
+            )
+
+            latest_selected_cost = (
+                latest_context.get(
+                    "predicted_cost_selected_currency",
+                    latest_cost_cny,
+                )
+            )
+
+            if latest_currency_code == "CNY":
+                st.success(
+                    f"Latest prediction: "
+                    f"¥{latest_cost_cny:,.2f} CNY"
+                )
+            else:
+                st.success(
+                    "Latest prediction: "
+                    f"{latest_currency_symbol}"
+                    f"{latest_selected_cost:,.2f} "
+                    f"{latest_currency_code} "
+                    f"(¥{latest_cost_cny:,.2f} CNY)"
+                )
 
         chat_history_container = st.container(
             height=290,
