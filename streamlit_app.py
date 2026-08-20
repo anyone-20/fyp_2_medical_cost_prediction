@@ -2221,6 +2221,19 @@ st.write(
 # A placeholder is used so the user must make an explicit selection.
 # ------------------------------------------------------------
 
+st.markdown(
+    """
+    <div style="
+        font-size: 22px;
+        font-weight: 700;
+        margin-bottom: 8px;
+    ">
+        Preferred currency
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
 selected_currency_label = st.selectbox(
     "Preferred currency",
     options=list(
@@ -2228,11 +2241,10 @@ selected_currency_label = st.selectbox(
     ),
     index=None,
     placeholder="Select your preferred currency",
+    label_visibility="collapsed",
     help=(
         "Select the currency you want to use for both medical-cost "
-        "inputs and the main prediction display. The application "
-        "converts the monetary inputs to CNY before sending them "
-        "to the machine-learning model."
+        "inputs and the main prediction display."
     ),
 )
 
