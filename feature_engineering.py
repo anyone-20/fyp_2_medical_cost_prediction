@@ -109,9 +109,9 @@ def create_model_features(
             "bmi age": [
                 bmi * age
             ],
-            "qp102": [
-                weight_kg / 0.5
-            ],
+           "qp102": [
+    weight_kg
+],
             "log_qi202": [
                 log_qi202
             ],
