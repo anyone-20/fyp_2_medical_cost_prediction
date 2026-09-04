@@ -3053,8 +3053,6 @@ else:
         with personal_col1:
             age = st.number_input(
                 "Age",
-                min_value=1,
-                max_value=119,
                 value=40,
                 step=1,
                 help=(
@@ -3075,8 +3073,6 @@ else:
         with personal_col2:
             height_cm = st.number_input(
                 "Height (cm)",
-                min_value=50.0,
-                max_value=250.0,
                 value=165.0,
                 step=0.1,
                 help=(
@@ -3086,8 +3082,6 @@ else:
 
             weight_kg = st.number_input(
                 "Weight (kg)",
-                min_value=10.0,
-                max_value=300.0,
                 value=60.0,
                 step=0.1,
                 help=(
@@ -3204,7 +3198,6 @@ else:
                     "Current outpatient medical cost "
                     f"({selected_currency_code})"
                 ),
-                min_value=0.0,
                 value=0.0,
                 step=100.0,
                 help=(
@@ -3219,13 +3212,43 @@ else:
                     "Previous inpatient medical cost "
                     f"({selected_currency_code})"
                 ),
-                min_value=0.0,
                 value=0.0,
                 step=100.0,
                 help=(
                     "Enter previous inpatient medical spending in "
                     f"{selected_currency_label}."
                 ),
+            )
+
+        # --------------------------------------------------------
+        # PRE-SUBMISSION VALIDATION
+        # --------------------------------------------------------
+        # Validate the values immediately after the user enters them.
+        # If any value is invalid, the Predict button remains disabled
+        # until the user corrects the input.
+        form_validation_error = None
+
+        try:
+            validate_raw_inputs(
+                age=int(age),
+                height_cm=float(height_cm),
+                weight_kg=float(weight_kg),
+                outpatient_cost=float(outpatient_cost_selected),
+                previous_inpatient_cost=float(
+                    previous_inpatient_cost_selected
+                ),
+            )
+        except (ValueError, TypeError) as error:
+            form_validation_error = str(error)
+
+        if form_validation_error:
+            st.error(
+                "❌ Please correct the invalid input before continuing."
+            )
+            st.warning(form_validation_error)
+        else:
+            st.success(
+                "✅ All input values are valid. You can continue with the prediction."
             )
 
         st.warning(
@@ -3237,6 +3260,7 @@ else:
             "✨ Predict inpatient medical cost",
             use_container_width=True,
             type="primary",
+            disabled=form_validation_error is not None,
         )
 
 
