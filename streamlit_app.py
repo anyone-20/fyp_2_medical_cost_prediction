@@ -1184,74 +1184,97 @@ with tab_locator:
     st.markdown("##### Detect Location & Start Searching")
     st.caption("Click the button below to retrieve facilities within your specified criteria.")
 
-    # 2. BEAUTIFIED LIGHT-BLUE BUTTON (NATIVE STREAMLIT GEOLOCATION RE-STYLED)
-# 2. BEAUTIFIED GEOLOCATION ACTION PILL
+   # 2. INLINE ROW WITH GUIDANCE ARROW
     st.markdown(
         """
         <style>
-        .geo-btn-card {
+        .search-inline-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin: 0.8rem 0 1.4rem 0;
+            flex-wrap: wrap;
+        }
+
+        .search-pill-label {
             display: inline-flex;
             align-items: center;
-            justify-content: flex-start;
-            gap: 12px;
-            padding: 8px 24px 8px 16px;
-            border-radius: 16px;
+            gap: 8px;
+            padding: 0.65rem 1.35rem;
             background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
-            border: 1.5px solid #90caf9;
-            box-shadow: 0 4px 14px rgba(33, 150, 243, 0.16);
-            margin: 0.6rem 0 1.4rem 0;
-            transition: all 180ms ease;
-        }
-
-        .geo-btn-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(33, 150, 243, 0.26);
-            border-color: #64b5f6;
-        }
-
-        .geo-btn-label {
-            font-size: 1.05rem;
-            font-weight: 780;
             color: #1565c0;
+            border: 1.5px solid #90caf9;
+            border-radius: 14px;
+            font-size: 1.02rem;
+            font-weight: 780;
             letter-spacing: 0.2px;
+            box-shadow: 0 4px 12px rgba(33, 150, 243, 0.14);
             user-select: none;
-            white-space: nowrap;
         }
 
-        /* Clean up iframe container constraints */
-        .geo-btn-card div[data-testid="stCustomComponentV1"] {
+        .search-guide-hint {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.92rem;
+            font-weight: 750;
+            color: #1e88e5;
+            background: #f0f7ff;
+            border: 1px dashed #90caf9;
+            padding: 0.45rem 0.85rem;
+            border-radius: 10px;
+        }
+
+        .search-guide-arrow {
+            display: inline-block;
+            font-size: 1.25rem;
+            animation: bounceRight 1.4s ease-in-out infinite;
+        }
+
+        @keyframes bounceRight {
+            0%, 100% { transform: translateX(0); }
+            50% { transform: translateX(5px); }
+        }
+
+        /* Clean up component iframe alignment */
+        div[data-testid="stCustomComponentV1"]:has(iframe[title="streamlit_geolocation.streamlit_geolocation"]) {
             display: flex !important;
             align-items: center !important;
-            justify-content: center !important;
-            width: 36px !important;
-            height: 36px !important;
             margin: 0 !important;
             padding: 0 !important;
         }
 
-        /* Modernize and softly round the locator icon frame */
-        .geo-btn-card iframe[title="streamlit_geolocation.streamlit_geolocation"] {
-            width: 36px !important;
-            height: 36px !important;
-            border-radius: 10px !important;
-            border: none !important;
-            background: #ffffff !important;
-            box-shadow: 0 2px 6px rgba(21, 101, 192, 0.2) !important;
-            cursor: pointer !important;
-            overflow: hidden !important;
+        iframe[title="streamlit_geolocation.streamlit_geolocation"] {
+            border-radius: 8px !important;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12) !important;
         }
         </style>
-
-        <div class="geo-btn-card">
-            <span class="geo-btn-label">📍 Start Searching:</span>
         """,
         unsafe_allow_html=True,
     )
 
-    user_loc = streamlit_geolocation()
+    # Use compact columns to force the items on the exact same row
+    col_label, col_btn, _ = st.columns([auto_col := 3, 1, 4])
 
-    st.markdown("</div>", unsafe_allow_html=True)
+    with col_label:
+        st.markdown(
+            """
+            <div class="search-inline-row">
+                <div class="search-pill-label">
+                    <span>📍 Start Searching:</span>
+                </div>
+                <div class="search-guide-hint">
+                    <span>Click this button</span>
+                    <span class="search-guide-arrow">👉</span>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
+    with col_btn:
+        user_loc = streamlit_geolocation()
+        
     # 3. FACILITY SEARCH & MAP PRESENTATION
     if user_loc and user_loc.get("latitude") is not None and user_loc.get("longitude") is not None:
         u_lat = float(user_loc["latitude"])
