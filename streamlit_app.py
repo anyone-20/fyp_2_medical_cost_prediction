@@ -1032,7 +1032,11 @@ def create_engineered_model_input(
 # OpenStreetMap Overpass is used to retrieve nearby hospitals/clinics.
 # ============================================================
 
-OVERPASS_API_URL = "https://overpass-api.de/api/interpreter"
+OVERPASS_API_URLS = [
+    "https://overpass.private.coffee/api/interpreter",
+    "https://overpass-api.de/api/interpreter",
+]
+
 HEALTHCARE_SEARCH_RADIUS_M = 5000
 HEALTHCARE_MAX_RESULTS = 10
 
