@@ -1234,7 +1234,7 @@ with tab_locator:
             _, map_col, _ = st.columns([1, 4, 1])
             with map_col:
                 st.map(map_data, zoom=12, height=260, use_container_width=True)
-                
+                )
 
             for i, fac in enumerate(facilities, start=1):
                 badge_class = "badge-hospital" if fac["type"] == "Hospital" else "badge-clinic"
