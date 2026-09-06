@@ -194,16 +194,6 @@ st.markdown(
         margin-top: 0.35rem;
     }
 
-    /* Container Box Styling */
-    .input-wrapper-box {
-        padding: 1.25rem 1.3rem 1.35rem;
-        border: 1px solid var(--app-border);
-        border-radius: 20px;
-        background: var(--app-surface);
-        box-shadow: var(--app-shadow);
-        margin-bottom: 1.5rem;
-    }
-
     div[data-baseweb="input"] > div,
     div[data-baseweb="base-input"],
     div[data-baseweb="select"] > div {
@@ -270,16 +260,6 @@ st.markdown(
         margin: .42rem 2rem .42rem 0;
         background: var(--app-surface);
         color: var(--app-text);
-    }
-
-    /* Start Searching Trigger Styling */
-    .search-btn-container button {
-        background: linear-gradient(135deg, #2b6cb0, #173b5e) !important;
-        color: white !important;
-        font-weight: 780 !important;
-        font-size: 1.05rem !important;
-        border-radius: 12px !important;
-        padding: 0.65rem 1.4rem !important;
     }
     </style>
     """,
@@ -582,7 +562,7 @@ def search_nearby_facilities(lat: float, lon: float, radius_m: int = 5000) -> li
 
 
 # ============================================================
-# 8. GEMINI CLIENT WITH RETRY & FALLBACK FOR 503 OVERLOAD
+# 8. GEMINI CLIENT WITH RETRY & PROD FALLBACK
 # ============================================================
 
 @st.cache_resource
@@ -592,8 +572,8 @@ def load_gemini_client(api_key: str):
 
 
 def call_gemini_with_fallback(client: Any, prompt: str) -> str:
-    """Execute Gemini request with automatic failover to gemini-3.5-flash-lite."""
-    models_to_try = ["gemini-2.5-flash", "gemini-3.5-flash-lite"]
+    """Execute Gemini request with fallback to gemini-2.5-flash-lite on 503 load."""
+    models_to_try = ["gemini-2.5-flash", "gemini-2.5-flash-lite"]
     last_err = None
 
     for model_name in models_to_try:
@@ -609,16 +589,14 @@ def call_gemini_with_fallback(client: Any, prompt: str) -> str:
             except Exception as e:
                 err_str = str(e)
                 last_err = e
-                # Retry on temporary high-load / capacity spikes
                 if "503" in err_str or "UNAVAILABLE" in err_str:
                     time.sleep(1.0 * (attempt + 1))
                     continue
-                # If a model returns 404 or other client status, immediately attempt the next model
                 break
-
     if last_err:
         raise last_err
     return ""
+
 
 def detect_chat_intent(*, user_message: str, prediction_context: dict[str, Any]) -> dict[str, Any]:
     if not GEMINI_API_KEY:
@@ -815,7 +793,7 @@ if "had_validation_error" not in st.session_state:
 st.markdown(
     """
     <div class="app-hero">
-        <h1>🏥 Individual Inpatient Cost Analytics & Healthcare Hub</h1>
+        <h1>🏥 Medical Cost Analytics & Healthcare Hub</h1>
         <p>
             Estimate inpatient medical expenses powered by an ensemble gradient boosting pipeline,
             or locate verified hospitals and medical clinics around you.
@@ -869,129 +847,127 @@ with tab_prediction:
             "Medical-cost inputs will be converted to CNY before feature engineering and model prediction."
         )
 
-        # Reactive input validation wrapper with on_change refreshing
         def handle_input_change():
             pass
 
-    
-        st.markdown("#### Personal information")
-        p_col1, p_col2 = st.columns(2)
+        with st.container(border=True):
+            st.markdown("#### Personal information")
+            p_col1, p_col2 = st.columns(2)
 
-        with p_col1:
-            age = st.number_input("Age", value=st.session_state.f_age, step=1, key="f_age", on_change=handle_input_change)
-            is_age_invalid = age < 1 or age > 119
-            if is_age_invalid:
-                st.markdown("<div class='error-inline'>⚠️ Age must be between 1 and 119.</div>", unsafe_allow_html=True)
-            gender_label = st.selectbox("Gender", options=list(GENDER_MAPPING.keys()), key="f_gender", on_change=handle_input_change)
+            with p_col1:
+                age = st.number_input("Age", value=st.session_state.f_age, step=1, key="f_age", on_change=handle_input_change)
+                is_age_invalid = age < 1 or age > 119
+                if is_age_invalid:
+                    st.markdown("<div class='error-inline'>⚠️ Age must be between 1 and 119.</div>", unsafe_allow_html=True)
+                gender_label = st.selectbox("Gender", options=list(GENDER_MAPPING.keys()), key="f_gender", on_change=handle_input_change)
 
-        with p_col2:
-            height_cm = st.number_input("Height (cm)", value=st.session_state.f_height, step=0.1, key="f_height", on_change=handle_input_change)
-            is_height_invalid = height_cm <= 0 or height_cm > 250
-            if is_height_invalid:
-                st.markdown("<div class='error-inline'>⚠️ Height must be between 50 and 250 cm.</div>", unsafe_allow_html=True)
+            with p_col2:
+                height_cm = st.number_input("Height (cm)", value=st.session_state.f_height, step=0.1, key="f_height", on_change=handle_input_change)
+                is_height_invalid = height_cm <= 0 or height_cm > 250
+                if is_height_invalid:
+                    st.markdown("<div class='error-inline'>⚠️ Height must be between 50 and 250 cm.</div>", unsafe_allow_html=True)
 
-            weight_kg = st.number_input("Weight (kg)", value=st.session_state.f_weight, step=0.1, key="f_weight", on_change=handle_input_change)
-            is_weight_invalid = weight_kg <= 0 or weight_kg > 300
-            if is_weight_invalid:
-                st.markdown("<div class='error-inline'>⚠️ Weight must be between 10 and 300 kg.</div>", unsafe_allow_html=True)
+                weight_kg = st.number_input("Weight (kg)", value=st.session_state.f_weight, step=0.1, key="f_weight", on_change=handle_input_change)
+                is_weight_invalid = weight_kg <= 0 or weight_kg > 300
+                if is_weight_invalid:
+                    st.markdown("<div class='error-inline'>⚠️ Weight must be between 10 and 300 kg.</div>", unsafe_allow_html=True)
 
-        calculated_bmi = float(weight_kg / ((height_cm / 100.0) ** 2)) if height_cm > 0 else 0.0
-        is_bmi_invalid = calculated_bmi < 10 or calculated_bmi > 80
+            calculated_bmi = float(weight_kg / ((height_cm / 100.0) ** 2)) if height_cm > 0 else 0.0
+            is_bmi_invalid = calculated_bmi < 10 or calculated_bmi > 80
 
-        bmi_status = (
-            "Underweight" if calculated_bmi < 18.5
-            else "Normal range" if calculated_bmi < 25
-            else "Overweight" if calculated_bmi < 30
-            else "High BMI"
-        )
-
-        if is_bmi_invalid:
-            st.markdown(f"<div class='error-inline'>⚠️ Calculated BMI ({calculated_bmi:.2f}) is outside the normal range (10 - 80).</div>", unsafe_allow_html=True)
-        else:
-            st.info(f"Calculated BMI: **{calculated_bmi:.2f}** ({bmi_status})")
-
-        st.divider()
-        st.markdown("#### Health and lifestyle information")
-        h_col1, h_col2 = st.columns(2)
-        with h_col1:
-            chronic_illness_label = st.selectbox("Chronic illness diagnosis", options=list(YES_NO_MAPPING.keys()), key="f_chronic", on_change=handle_input_change)
-            smoking_label = st.selectbox("Smoking status", options=list(YES_NO_MAPPING.keys()), key="f_smoking", on_change=handle_input_change)
-        with h_col2:
-            hospitalized_label = st.selectbox("Hospitalized during the past 6 months", options=list(YES_NO_MAPPING.keys()), key="f_hosp", on_change=handle_input_change)
-            health_label = st.selectbox("Self-rated health", options=list(HEALTH_MAPPING.keys()), index=2, key="f_health", on_change=handle_input_change)
-
-        employed_label = st.selectbox("Employment status", options=list(EMPLOYMENT_MAPPING.keys()), key="f_employed", on_change=handle_input_change)
-
-        st.divider()
-        st.markdown("#### Medical-cost information")
-        st.caption(
-            f"Enter both amounts in {selected_currency_label}. "
-            "They will be converted to CNY automatically before the model applies log1p and interaction-feature rules."
-        )
-
-        c_col1, c_col2 = st.columns(2)
-        with c_col1:
-            outpatient_cost_selected = st.number_input(
-                f"Current outpatient medical cost ({selected_currency_code})",
-                value=st.session_state.f_outpatient,
-                step=100.0,
-                key="f_outpatient",
-                on_change=handle_input_change,
+            bmi_status = (
+                "Underweight" if calculated_bmi < 18.5
+                else "Normal range" if calculated_bmi < 25
+                else "Overweight" if calculated_bmi < 30
+                else "High BMI"
             )
-            is_outpatient_invalid = outpatient_cost_selected < 0
-            if is_outpatient_invalid:
-                st.markdown("<div class='error-inline'>⚠️ Outpatient cost cannot be negative.</div>", unsafe_allow_html=True)
 
-        with c_col2:
-            previous_inpatient_cost_selected = st.number_input(
-                f"Previous inpatient medical cost ({selected_currency_code})",
-                value=st.session_state.f_prev_inpatient,
-                step=100.0,
-                key="f_prev_inpatient",
-                on_change=handle_input_change,
+            if is_bmi_invalid:
+                st.markdown(f"<div class='error-inline'>⚠️ Calculated BMI ({calculated_bmi:.2f}) is outside the normal range (10 - 80).</div>", unsafe_allow_html=True)
+            else:
+                st.info(f"Calculated BMI: **{calculated_bmi:.2f}** ({bmi_status})")
+
+            st.divider()
+            st.markdown("#### Health and lifestyle information")
+            h_col1, h_col2 = st.columns(2)
+            with h_col1:
+                chronic_illness_label = st.selectbox("Chronic illness diagnosis", options=list(YES_NO_MAPPING.keys()), key="f_chronic", on_change=handle_input_change)
+                smoking_label = st.selectbox("Smoking status", options=list(YES_NO_MAPPING.keys()), key="f_smoking", on_change=handle_input_change)
+            with h_col2:
+                hospitalized_label = st.selectbox("Hospitalized during the past 6 months", options=list(YES_NO_MAPPING.keys()), key="f_hosp", on_change=handle_input_change)
+                health_label = st.selectbox("Self-rated health", options=list(HEALTH_MAPPING.keys()), index=2, key="f_health", on_change=handle_input_change)
+
+            employed_label = st.selectbox("Employment status", options=list(EMPLOYMENT_MAPPING.keys()), key="f_employed", on_change=handle_input_change)
+
+            st.divider()
+            st.markdown("#### Medical-cost information")
+            st.caption(
+                f"Enter both amounts in {selected_currency_label}. "
+                "They will be converted to CNY automatically before the model applies log1p and interaction-feature rules."
             )
-            is_prev_inpatient_invalid = previous_inpatient_cost_selected < 0
-            if is_prev_inpatient_invalid:
-                st.markdown("<div class='error-inline'>⚠️ Previous inpatient cost cannot be negative.</div>", unsafe_allow_html=True)
 
-        has_validation_error = (
-            is_age_invalid
-            or is_height_invalid
-            or is_weight_invalid
-            or is_bmi_invalid
-            or is_outpatient_invalid
-            or is_prev_inpatient_invalid
-        )
+            c_col1, c_col2 = st.columns(2)
+            with c_col1:
+                outpatient_cost_selected = st.number_input(
+                    f"Current outpatient medical cost ({selected_currency_code})",
+                    value=st.session_state.f_outpatient,
+                    step=100.0,
+                    key="f_outpatient",
+                    on_change=handle_input_change,
+                )
+                is_outpatient_invalid = outpatient_cost_selected < 0
+                if is_outpatient_invalid:
+                    st.markdown("<div class='error-inline'>⚠️ Outpatient cost cannot be negative.</div>", unsafe_allow_html=True)
 
-        # REFRESH STATE TRIGGER: When user transitions from invalid -> valid, refresh to clear red borders immediately
-        if st.session_state.had_validation_error and not has_validation_error:
-            st.session_state.had_validation_error = False
-            st.rerun()
+            with c_col2:
+                previous_inpatient_cost_selected = st.number_input(
+                    f"Previous inpatient medical cost ({selected_currency_code})",
+                    value=st.session_state.f_prev_inpatient,
+                    step=100.0,
+                    key="f_prev_inpatient",
+                    on_change=handle_input_change,
+                )
+                is_prev_inpatient_invalid = previous_inpatient_cost_selected < 0
+                if is_prev_inpatient_invalid:
+                    st.markdown("<div class='error-inline'>⚠️ Previous inpatient cost cannot be negative.</div>", unsafe_allow_html=True)
 
-        if has_validation_error:
-            st.session_state.had_validation_error = True
-            st.markdown(
-                """
-                <style>
-                div[data-baseweb="input"] > div {
-                    border: 2px solid #e53e3e !important;
-                    background-color: #fff5f5 !important;
-                }
-                </style>
-                """,
-                unsafe_allow_html=True,
+            has_validation_error = (
+                is_age_invalid
+                or is_height_invalid
+                or is_weight_invalid
+                or is_bmi_invalid
+                or is_outpatient_invalid
+                or is_prev_inpatient_invalid
             )
-            st.error("❌ Invalid inputs detected. Please correct the highlighted fields before predicting.")
-        else:
-            st.success("✅ All input values are valid. You can continue with the prediction.")
 
-        execute_prediction = st.button(
-            "✨ Predict inpatient medical cost",
-            use_container_width=True,
-            type="primary",
-            disabled=has_validation_error,
-        )
-       
+            # Auto-refresh to reset error styling immediately upon resolution
+            if st.session_state.had_validation_error and not has_validation_error:
+                st.session_state.had_validation_error = False
+                st.rerun()
+
+            if has_validation_error:
+                st.session_state.had_validation_error = True
+                st.markdown(
+                    """
+                    <style>
+                    div[data-baseweb="input"] > div {
+                        border: 2px solid #e53e3e !important;
+                        background-color: #fff5f5 !important;
+                    }
+                    </style>
+                    """,
+                    unsafe_allow_html=True,
+                )
+                st.error("❌ Invalid inputs detected. Please correct the highlighted fields before predicting.")
+            else:
+                st.success("✅ All input values are valid. You can continue with the prediction.")
+
+            execute_prediction = st.button(
+                "✨ Predict inpatient medical cost",
+                use_container_width=True,
+                type="primary",
+                disabled=has_validation_error,
+            )
 
     # PROCESS PREDICTION
     if execute_prediction:
@@ -1158,27 +1134,55 @@ with tab_prediction:
             st.error("Prediction failed.")
             st.exception(error)
 
-# 2. INLINE ACTION: HINT POINTING DIRECTLY TO THE LOCATOR BUTTON
+
+# ============================================================
+# TAB 2: NEARBY HEALTHCARE FACILITIES
+# ============================================================
+
+with tab_locator:
+    st.markdown("### 🏥 Real-Time Healthcare Provider Locator")
+    st.write("Configure your search preferences first, then click the locator button below.")
+
+    # 1. PRIORITIZE SEARCH FILTERS FIRST
+    filter_col1, filter_col2 = st.columns(2)
+    with filter_col1:
+        radius_choice = st.select_slider(
+            "Search Radius (Kilometers)",
+            options=[1, 3, 5, 10, 15],
+            value=5,
+        )
+    with filter_col2:
+        type_filter = st.radio(
+            "Show Facilities",
+            ["All", "Hospitals Only", "Clinics Only"],
+            horizontal=True,
+        )
+
+    # 2. INLINE ACTION: HINT POINTING DIRECTLY TO THE LOCATOR BUTTON
     st.markdown(
         """
         <style>
+        div[data-testid="stHorizontalBlock"] {
+            align-items: center !important;
+        }
+
         .locator-trigger-container {
             display: flex;
             align-items: center;
-            gap: 14px;
-            margin: 0.8rem 0 1.5rem 0;
+            margin: 0.4rem 0;
+            width: fit-content;
         }
 
         .locator-hint-pill {
             display: inline-flex;
             align-items: center;
             gap: 8px;
-            padding: 0.6rem 1.25rem;
+            padding: 0.55rem 1.15rem;
             background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
             color: #1565c0;
             border: 1.5px solid #90caf9;
             border-radius: 14px;
-            font-size: 1rem;
+            font-size: 0.98rem;
             font-weight: 780;
             letter-spacing: 0.2px;
             box-shadow: 0 4px 12px rgba(33, 150, 243, 0.14);
@@ -1187,7 +1191,7 @@ with tab_prediction:
         }
 
         .locator-finger-icon {
-            font-size: 1.35rem;
+            font-size: 1.3rem;
             display: inline-block;
             animation: pointerBounce 1.4s ease-in-out infinite;
         }
@@ -1197,9 +1201,12 @@ with tab_prediction:
             50% { transform: translateX(5px); }
         }
 
-        /* Enforce horizontal alignment and remove stray iframe borders */
-        div[data-testid="stHorizontalBlock"]:has(.locator-trigger-container) {
+        div[data-testid="stCustomComponentV1"] {
+            display: flex !important;
             align-items: center !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            height: 38px !important;
         }
 
         iframe[title="streamlit_geolocation.streamlit_geolocation"] {
@@ -1207,13 +1214,15 @@ with tab_prediction:
             border: none !important;
             background: transparent !important;
             height: 38px !important;
+            width: 38px !important;
+            margin: 0 !important;
         }
         </style>
         """,
         unsafe_allow_html=True,
     )
 
-    col_hint, col_button, _ = st.columns([auto_hint := 2.2, auto_btn := 0.8, auto_space := 5], vertical_alignment="center")
+    col_hint, col_button, _ = st.columns([2.4, 0.6, 5], vertical_alignment="center")
 
     with col_hint:
         st.markdown(
@@ -1230,8 +1239,7 @@ with tab_prediction:
 
     with col_button:
         user_loc = streamlit_geolocation()
-        
-        
+
     # 3. FACILITY SEARCH & MAP PRESENTATION
     if user_loc and user_loc.get("latitude") is not None and user_loc.get("longitude") is not None:
         u_lat = float(user_loc["latitude"])
@@ -1295,7 +1303,8 @@ with tab_prediction:
                         st.button("No Phone Listed", disabled=True, key=f"dis_fac_{i}", use_container_width=True)
     else:
         st.info("Set your search preferences above, then click the locator button to search.")
-        
+
+
 # ============================================================
 # TAB 3: SYSTEM SPECIFICATIONS
 # ============================================================
