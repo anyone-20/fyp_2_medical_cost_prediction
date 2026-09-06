@@ -1227,10 +1227,14 @@ with tab_locator:
         else:
             st.markdown(f"##### Showing {len(facilities)} Medical Facilities Nearby")
 
-            map_data = pd.DataFrame(
+           map_data = pd.DataFrame(
                 [{"lat": f["lat"], "lon": f["lon"]} for f in facilities] + [{"lat": u_lat, "lon": u_lon}]
             )
-            st.map(map_data, zoom=12, use_container_width=True)
+            # Center the map with narrower side margins
+            _, map_col, _ = st.columns([1, 4, 1])
+            with map_col:
+                st.map(map_data, zoom=12, height=260, use_container_width=True)
+                
 
             for i, fac in enumerate(facilities, start=1):
                 badge_class = "badge-hospital" if fac["type"] == "Hospital" else "badge-clinic"
