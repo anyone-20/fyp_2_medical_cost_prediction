@@ -194,13 +194,14 @@ st.markdown(
         margin-top: 0.35rem;
     }
 
-    /* Form and Inputs */
-    div[data-testid="stForm"] {
+    /* Container Box Styling */
+    .input-wrapper-box {
         padding: 1.25rem 1.3rem 1.35rem;
         border: 1px solid var(--app-border);
         border-radius: 20px;
         background: var(--app-surface);
         box-shadow: var(--app-shadow);
+        margin-bottom: 1.5rem;
     }
 
     div[data-baseweb="input"] > div,
@@ -219,18 +220,6 @@ st.markdown(
 
     div[data-baseweb="select"] span {
         color: #173b5e !important;
-    }
-
-    /* Dynamic Validation Red Alert Highlighting */
-    .field-invalid div[data-baseweb="input"] > div,
-    .field-invalid div[data-baseweb="base-input"] {
-        border: 2px solid var(--app-danger) !important;
-        background: var(--app-danger-soft) !important;
-    }
-
-    .field-invalid label {
-        color: var(--app-danger) !important;
-        font-weight: 700 !important;
     }
 
     .error-inline {
@@ -281,6 +270,16 @@ st.markdown(
         margin: .42rem 2rem .42rem 0;
         background: var(--app-surface);
         color: var(--app-text);
+    }
+
+    /* Start Searching Trigger Styling */
+    .search-btn-container button {
+        background: linear-gradient(135deg, #2b6cb0, #173b5e) !important;
+        color: white !important;
+        font-weight: 780 !important;
+        font-size: 1.05rem !important;
+        border-radius: 12px !important;
+        padding: 0.65rem 1.4rem !important;
     }
     </style>
     """,
@@ -593,11 +592,7 @@ def load_gemini_client(api_key: str):
 
 
 def call_gemini_with_fallback(client: Any, prompt: str) -> str:
-    """
-    Execute Gemini request with exponential backoff and supported fallback models.
-    Uses 'gemini-2.5-flash' first, then fails over to 'gemini-2.5-flash-lite'
-    if the main model experiences 503 load spikes.
-    """
+    """Execute Gemini request with fallback to gemini-2.5-flash-lite on 503 load."""
     models_to_try = ["gemini-2.5-flash", "gemini-2.5-flash-lite"]
     last_err = None
 
@@ -614,17 +609,15 @@ def call_gemini_with_fallback(client: Any, prompt: str) -> str:
             except Exception as e:
                 err_str = str(e)
                 last_err = e
-                # Retry on temporary load spikes
                 if "503" in err_str or "UNAVAILABLE" in err_str:
                     time.sleep(1.0 * (attempt + 1))
                     continue
-                # If 404 or any other client error occurs, immediately try the next model
                 break
-
     if last_err:
         raise last_err
     return ""
-    
+
+
 def detect_chat_intent(*, user_message: str, prediction_context: dict[str, Any]) -> dict[str, Any]:
     if not GEMINI_API_KEY:
         raise RuntimeError("GEMINI_API_KEY is not configured.")
@@ -682,7 +675,6 @@ def run_what_if_prediction(*, artifact: dict[str, Any], prediction_context: dict
     modified = dict(original_inputs)
     modified.update(changes)
 
-    # Basic bounds checking for simulated changes
     sim_age = int(modified.get("age", original_inputs["age"]))
     sim_height = float(modified.get("height_cm", original_inputs["height_cm"]))
     sim_weight = float(modified.get("weight_kg", original_inputs["weight_kg"]))
@@ -770,7 +762,7 @@ Provide a concise, helpful explanation without diagnosing conditions.
 
 
 # ============================================================
-# 9. LOAD DATA & SESSION STATE
+# 9. LOAD DATA & INITIALIZE SESSION STATE
 # ============================================================
 
 try:
@@ -786,6 +778,32 @@ if "chat_messages" not in st.session_state:
     st.session_state.chat_messages = [
         {"role": "assistant", "content": "Hello! Generate a prediction and I can explain the result and model factors."}
     ]
+
+# Default values for inputs
+if "f_age" not in st.session_state:
+    st.session_state.f_age = 40
+if "f_gender" not in st.session_state:
+    st.session_state.f_gender = "Female"
+if "f_height" not in st.session_state:
+    st.session_state.f_height = 165.0
+if "f_weight" not in st.session_state:
+    st.session_state.f_weight = 60.0
+if "f_chronic" not in st.session_state:
+    st.session_state.f_chronic = "No"
+if "f_smoking" not in st.session_state:
+    st.session_state.f_smoking = "No"
+if "f_hosp" not in st.session_state:
+    st.session_state.f_hosp = "No"
+if "f_health" not in st.session_state:
+    st.session_state.f_health = "Good"
+if "f_employed" not in st.session_state:
+    st.session_state.f_employed = "Employed"
+if "f_outpatient" not in st.session_state:
+    st.session_state.f_outpatient = 0.0
+if "f_prev_inpatient" not in st.session_state:
+    st.session_state.f_prev_inpatient = 0.0
+if "had_validation_error" not in st.session_state:
+    st.session_state.had_validation_error = False
 
 
 # ============================================================
@@ -825,7 +843,6 @@ with tab_prediction:
     st.markdown("### Patient Parameters & Expenditure")
     st.caption("Select your preferred currency first. Then enter all required personal, health, and medical-cost details.")
 
-    # MANDATORY CURRENCY SELECTOR (OUTSIDE FORM TO PREVENT STALE LABELS)
     selected_currency_label = st.selectbox(
         "Preferred currency",
         options=list(CURRENCY_OPTIONS.keys()),
@@ -836,7 +853,7 @@ with tab_prediction:
 
     if selected_currency_label is None:
         st.info("⚠️ Please select your preferred currency above to display and unlock the medical cost prediction form.")
-        submitted = False
+        execute_prediction = False
     else:
         selected_currency = CURRENCY_OPTIONS[selected_currency_label]
         selected_currency_code = selected_currency["code"]
@@ -850,119 +867,132 @@ with tab_prediction:
             "Medical-cost inputs will be converted to CNY before feature engineering and model prediction."
         )
 
-        with st.form("medical_cost_form"):
-            st.markdown("#### Personal information")
-            p_col1, p_col2 = st.columns(2)
-            with p_col1:
-                age = st.number_input("Age", value=40, step=1, help="Enter the individual's age in completed years.")
-                is_age_invalid = age < 1 or age > 119
-                if is_age_invalid:
-                    st.markdown("<div class='error-inline'>⚠️ Age must be between 1 and 119.</div>", unsafe_allow_html=True)
-                gender_label = st.selectbox("Gender", options=list(GENDER_MAPPING.keys()))
+        # Reactive input validation wrapper with on_change refreshing
+        def handle_input_change():
+            pass
 
-            with p_col2:
-                height_cm = st.number_input("Height (cm)", value=165.0, step=0.1, help="Used with weight to calculate BMI.")
-                is_height_invalid = height_cm <= 0 or height_cm > 250
-                if is_height_invalid:
-                    st.markdown("<div class='error-inline'>⚠️ Height must be between 50 and 250 cm.</div>", unsafe_allow_html=True)
+        st.markdown('<div class="input-wrapper-box">', unsafe_allow_html=True)
+        st.markdown("#### Personal information")
+        p_col1, p_col2 = st.columns(2)
 
-                weight_kg = st.number_input("Weight (kg)", value=60.0, step=0.1, help="Used with height to calculate BMI.")
-                is_weight_invalid = weight_kg <= 0 or weight_kg > 300
-                if is_weight_invalid:
-                    st.markdown("<div class='error-inline'>⚠️ Weight must be between 10 and 300 kg.</div>", unsafe_allow_html=True)
+        with p_col1:
+            age = st.number_input("Age", value=st.session_state.f_age, step=1, key="f_age", on_change=handle_input_change)
+            is_age_invalid = age < 1 or age > 119
+            if is_age_invalid:
+                st.markdown("<div class='error-inline'>⚠️ Age must be between 1 and 119.</div>", unsafe_allow_html=True)
+            gender_label = st.selectbox("Gender", options=list(GENDER_MAPPING.keys()), key="f_gender", on_change=handle_input_change)
 
-            calculated_bmi = float(weight_kg / ((height_cm / 100.0) ** 2)) if height_cm > 0 else 0.0
-            is_bmi_invalid = calculated_bmi < 10 or calculated_bmi > 80
+        with p_col2:
+            height_cm = st.number_input("Height (cm)", value=st.session_state.f_height, step=0.1, key="f_height", on_change=handle_input_change)
+            is_height_invalid = height_cm <= 0 or height_cm > 250
+            if is_height_invalid:
+                st.markdown("<div class='error-inline'>⚠️ Height must be between 50 and 250 cm.</div>", unsafe_allow_html=True)
 
-            bmi_status = (
-                "Underweight" if calculated_bmi < 18.5
-                else "Normal range" if calculated_bmi < 25
-                else "Overweight" if calculated_bmi < 30
-                else "High BMI"
+            weight_kg = st.number_input("Weight (kg)", value=st.session_state.f_weight, step=0.1, key="f_weight", on_change=handle_input_change)
+            is_weight_invalid = weight_kg <= 0 or weight_kg > 300
+            if is_weight_invalid:
+                st.markdown("<div class='error-inline'>⚠️ Weight must be between 10 and 300 kg.</div>", unsafe_allow_html=True)
+
+        calculated_bmi = float(weight_kg / ((height_cm / 100.0) ** 2)) if height_cm > 0 else 0.0
+        is_bmi_invalid = calculated_bmi < 10 or calculated_bmi > 80
+
+        bmi_status = (
+            "Underweight" if calculated_bmi < 18.5
+            else "Normal range" if calculated_bmi < 25
+            else "Overweight" if calculated_bmi < 30
+            else "High BMI"
+        )
+
+        if is_bmi_invalid:
+            st.markdown(f"<div class='error-inline'>⚠️ Calculated BMI ({calculated_bmi:.2f}) is outside the normal range (10 - 80).</div>", unsafe_allow_html=True)
+        else:
+            st.info(f"Calculated BMI: **{calculated_bmi:.2f}** ({bmi_status})")
+
+        st.divider()
+        st.markdown("#### Health and lifestyle information")
+        h_col1, h_col2 = st.columns(2)
+        with h_col1:
+            chronic_illness_label = st.selectbox("Chronic illness diagnosis", options=list(YES_NO_MAPPING.keys()), key="f_chronic", on_change=handle_input_change)
+            smoking_label = st.selectbox("Smoking status", options=list(YES_NO_MAPPING.keys()), key="f_smoking", on_change=handle_input_change)
+        with h_col2:
+            hospitalized_label = st.selectbox("Hospitalized during the past 6 months", options=list(YES_NO_MAPPING.keys()), key="f_hosp", on_change=handle_input_change)
+            health_label = st.selectbox("Self-rated health", options=list(HEALTH_MAPPING.keys()), index=2, key="f_health", on_change=handle_input_change)
+
+        employed_label = st.selectbox("Employment status", options=list(EMPLOYMENT_MAPPING.keys()), key="f_employed", on_change=handle_input_change)
+
+        st.divider()
+        st.markdown("#### Medical-cost information")
+        st.caption(
+            f"Enter both amounts in {selected_currency_label}. "
+            "They will be converted to CNY automatically before the model applies log1p and interaction-feature rules."
+        )
+
+        c_col1, c_col2 = st.columns(2)
+        with c_col1:
+            outpatient_cost_selected = st.number_input(
+                f"Current outpatient medical cost ({selected_currency_code})",
+                value=st.session_state.f_outpatient,
+                step=100.0,
+                key="f_outpatient",
+                on_change=handle_input_change,
             )
+            is_outpatient_invalid = outpatient_cost_selected < 0
+            if is_outpatient_invalid:
+                st.markdown("<div class='error-inline'>⚠️ Outpatient cost cannot be negative.</div>", unsafe_allow_html=True)
 
-            if is_bmi_invalid:
-                st.markdown(f"<div class='error-inline'>⚠️ Calculated BMI ({calculated_bmi:.2f}) is outside the normal range (10 - 80).</div>", unsafe_allow_html=True)
-            else:
-                st.info(f"Calculated BMI: **{calculated_bmi:.2f}** ({bmi_status})")
-
-            st.divider()
-            st.markdown("#### Health and lifestyle information")
-            h_col1, h_col2 = st.columns(2)
-            with h_col1:
-                chronic_illness_label = st.selectbox("Chronic illness diagnosis", options=list(YES_NO_MAPPING.keys()))
-                smoking_label = st.selectbox("Smoking status", options=list(YES_NO_MAPPING.keys()))
-            with h_col2:
-                hospitalized_label = st.selectbox("Hospitalized during the past 6 months", options=list(YES_NO_MAPPING.keys()))
-                health_label = st.selectbox("Self-rated health", options=list(HEALTH_MAPPING.keys()), index=2)
-
-            employed_label = st.selectbox("Employment status", options=list(EMPLOYMENT_MAPPING.keys()))
-
-            st.divider()
-            st.markdown("#### Medical-cost information")
-            st.caption(
-                f"Enter both amounts in {selected_currency_label}. "
-                "They will be converted to CNY automatically before the model applies log1p and interaction-feature rules."
+        with c_col2:
+            previous_inpatient_cost_selected = st.number_input(
+                f"Previous inpatient medical cost ({selected_currency_code})",
+                value=st.session_state.f_prev_inpatient,
+                step=100.0,
+                key="f_prev_inpatient",
+                on_change=handle_input_change,
             )
+            is_prev_inpatient_invalid = previous_inpatient_cost_selected < 0
+            if is_prev_inpatient_invalid:
+                st.markdown("<div class='error-inline'>⚠️ Previous inpatient cost cannot be negative.</div>", unsafe_allow_html=True)
 
-            c_col1, c_col2 = st.columns(2)
-            with c_col1:
-                outpatient_cost_selected = st.number_input(
-                    f"Current outpatient medical cost ({selected_currency_code})",
-                    value=0.0,
-                    step=100.0,
-                )
-                is_outpatient_invalid = outpatient_cost_selected < 0
-                if is_outpatient_invalid:
-                    st.markdown("<div class='error-inline'>⚠️ Outpatient cost cannot be negative.</div>", unsafe_allow_html=True)
+        has_validation_error = (
+            is_age_invalid
+            or is_height_invalid
+            or is_weight_invalid
+            or is_bmi_invalid
+            or is_outpatient_invalid
+            or is_prev_inpatient_invalid
+        )
 
-            with c_col2:
-                previous_inpatient_cost_selected = st.number_input(
-                    f"Previous inpatient medical cost ({selected_currency_code})",
-                    value=0.0,
-                    step=100.0,
-                )
-                is_prev_inpatient_invalid = previous_inpatient_cost_selected < 0
-                if is_prev_inpatient_invalid:
-                    st.markdown("<div class='error-inline'>⚠️ Previous inpatient cost cannot be negative.</div>", unsafe_allow_html=True)
+        # REFRESH STATE TRIGGER: When user transitions from invalid -> valid, refresh to clear red borders immediately
+        if st.session_state.had_validation_error and not has_validation_error:
+            st.session_state.had_validation_error = False
+            st.rerun()
 
-            # Check all conditions and dynamically inject CSS red styling
-            has_error = (
-                is_age_invalid
-                or is_height_invalid
-                or is_weight_invalid
-                or is_bmi_invalid
-                or is_outpatient_invalid
-                or is_prev_inpatient_invalid
+        if has_validation_error:
+            st.session_state.had_validation_error = True
+            st.markdown(
+                """
+                <style>
+                div[data-baseweb="input"] > div {
+                    border: 2px solid #e53e3e !important;
+                    background-color: #fff5f5 !important;
+                }
+                </style>
+                """,
+                unsafe_allow_html=True,
             )
+            st.error("❌ Invalid inputs detected. Please correct the highlighted fields before predicting.")
+        else:
+            st.success("✅ All input values are valid. You can continue with the prediction.")
 
-            if is_age_invalid or is_height_invalid or is_weight_invalid or is_outpatient_invalid or is_prev_inpatient_invalid:
-                st.markdown(
-                    """
-                    <style>
-                    div[data-baseweb="input"] > div {
-                        border: 2px solid #e53e3e !important;
-                        background-color: #fff5f5 !important;
-                    }
-                    </style>
-                    """,
-                    unsafe_allow_html=True,
-                )
-
-            if has_error:
-                st.error("❌ Invalid inputs detected. Please correct the highlighted fields before predicting.")
-            else:
-                st.success("✅ All input values are valid. You can continue with the prediction.")
-
-            submitted = st.form_submit_button(
-                "✨ Predict inpatient medical cost",
-                use_container_width=True,
-                type="primary",
-                disabled=has_error,
-            )
+        execute_prediction = st.button(
+            "✨ Predict inpatient medical cost",
+            use_container_width=True,
+            type="primary",
+            disabled=has_validation_error,
+        )
+        st.markdown("</div>", unsafe_allow_html=True)
 
     # PROCESS PREDICTION
-    if submitted:
+    if execute_prediction:
         try:
             outpatient_cost_cny = (
                 float(outpatient_cost_selected) / exchange_rate
@@ -1032,11 +1062,9 @@ with tab_prediction:
                     use_container_width=True,
                 )
 
-                # NUMBERED DIRECTIONAL CONTRIBUTOR SUMMARY
                 for index, row in top_contributors.iterrows():
                     contribution = float(row["SHAP contribution"])
                     direction = "increased" if contribution >= 0 else "reduced"
-
                     st.write(f"{index + 1}. **{row['Feature']}** {direction} the model prediction.")
 
                     top_factor_context.append({
@@ -1135,7 +1163,7 @@ with tab_prediction:
 
 with tab_locator:
     st.markdown("### 🏥 Real-Time Healthcare Provider Locator")
-    st.write("Configure your search preferences first, then start the locator below.")
+    st.write("Configure your search preferences first, then click **Start Searching** below.")
 
     # 1. PRIORITIZE SEARCH FILTERS FIRST
     filter_col1, filter_col2 = st.columns(2)
@@ -1152,11 +1180,15 @@ with tab_locator:
             horizontal=True,
         )
 
-    st.markdown("##### Detect Location & Start Search")
+    st.markdown("##### Detect Location & Start Searching")
     st.caption("Click the button below to retrieve facilities within your specified criteria.")
 
-    # 2. TRIGGER GEOLOCATION BUTTON BELOW FILTERS
-    user_loc = streamlit_geolocation()
+    # 2. TRIGGER BUTTON LABEL UPDATED TO "Start Searching:"
+    st.markdown('<div class="search-btn-container">', unsafe_allow_html=True)
+    user_loc = streamlit_geolocation(
+        button_label="Start Searching:"
+    )
+    st.markdown('</div>', unsafe_allow_html=True)
 
     if user_loc and user_loc.get("latitude") and user_loc.get("longitude"):
         u_lat, u_lon = float(user_loc["latitude"]), float(user_loc["longitude"])
@@ -1218,7 +1250,7 @@ with tab_locator:
                     else:
                         st.button("No Phone Listed", disabled=True, key=f"dis_fac_{i}", use_container_width=True)
     else:
-        st.info("Set your search preferences above, then click the locator button to search.")
+        st.info("Set your search preferences above, then click **Start Searching:** to find nearby facilities.")
 
 
 # ============================================================
@@ -1297,7 +1329,6 @@ with st.container(key="floating_chat_launcher"):
             else:
                 try:
                     current_ctx = st.session_state.latest_prediction_context
-                    # SHOW SPINNER DURING AI INFERENCE
                     with st.spinner("AI Assistant is computing scenario..."):
                         intent_res = detect_chat_intent(user_message=clean_question, prediction_context=current_ctx)
 
