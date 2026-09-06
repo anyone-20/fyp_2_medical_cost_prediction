@@ -1182,30 +1182,93 @@ with tab_locator:
             horizontal=True,
         )
 
-    st.markdown("##### Detect Location & Start Searching")
-    st.caption("Click the button below to retrieve facilities within your specified criteria.")
-
-    # 2. TRIGGER GEOLOCATION
+# 2. BEAUTIFIED ACTION CALLOUT & GEOLOCATION TRIGGER
     st.markdown(
         """
         <style>
-        .search-btn-container div[data-testid="stCustomComponentV1"] iframe {
-            display: block;
+        .locator-action-card {
+            border: 1px solid var(--app-border);
+            border-radius: 18px;
+            background: linear-gradient(135deg, var(--app-surface), var(--app-soft));
+            padding: 1.3rem 1.4rem;
+            margin: 1.2rem 0 1.5rem 0;
+            box-shadow: var(--app-shadow-soft);
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
         }
-        .search-btn-label {
-            font-size: 0.95rem;
-            font-weight: 700;
+        .locator-card-title {
+            font-size: 1.15rem;
+            font-weight: 780;
+            color: var(--app-text);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin: 0;
+        }
+        .locator-card-desc {
+            font-size: 0.9rem;
+            color: var(--app-muted);
+            margin: 0 0 0.8rem 0;
+            line-height: 1.45;
+        }
+        .search-trigger-box {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.85rem;
+            background: var(--app-surface);
+            border: 1px solid var(--app-border);
+            padding: 0.6rem 1rem;
+            border-radius: 14px;
+            width: fit-content;
+            box-shadow: 0 2px 8px color-mix(in srgb, var(--app-text) 5%, transparent);
+            transition: border-color 0.2s ease, transform 0.15s ease;
+        }
+        .search-trigger-box:hover {
+            border-color: var(--app-primary);
+            transform: translateY(-1px);
+        }
+        .search-trigger-text {
+            font-size: 0.98rem;
+            font-weight: 750;
             color: var(--app-primary);
-            margin-bottom: 0.35rem;
+            letter-spacing: 0.01em;
+        }
+        /* Style the iframe container of streamlit_geolocation */
+        .search-trigger-box div[data-testid="stCustomComponentV1"] {
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            height: 38px !important;
+        }
+        .search-trigger-box iframe {
+            width: 38px !important;
+            height: 38px !important;
+            border: none !important;
+            filter: drop-shadow(0 2px 4px rgba(43, 108, 176, 0.25));
         }
         </style>
-        <div class="search-btn-label">📍 Start Searching:</div>
-        <div class="search-btn-container">
+        
+        <div class="locator-action-card">
+            <h4 class="locator-card-title">📍 Ready to Find Nearby Facilities?</h4>
+            <p class="locator-card-desc">
+                Click the locator target icon below to grant browser GPS permission and begin searching according to your selected radius.
+            </p>
+            <div class="search-trigger-box">
+                <span class="search-trigger-text">Start Searching:</span>
         """,
         unsafe_allow_html=True,
     )
     user_loc = streamlit_geolocation()
-    st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown(
+        """
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
     if user_loc and user_loc.get("latitude") and user_loc.get("longitude"):
         u_lat = float(user_loc["latitude"])
