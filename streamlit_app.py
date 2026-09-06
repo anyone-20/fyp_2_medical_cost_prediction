@@ -17,6 +17,9 @@ import pandas as pd
 import requests
 import streamlit as st
 import os
+from urllib.parse import quote
+
+from streamlit_geolocation import streamlit_geolocation
 
 
 
@@ -1020,6 +1023,224 @@ def create_engineered_model_input(
         )
 
     return engineered
+
+# ============================================================
+# 8A. NEARBY HEALTHCARE FACILITY LOCATOR
+# ============================================================
+# The location is requested ONLY when the user clicks the
+# streamlit-geolocation button. No location is requested on page load.
+# OpenStreetMap Overpass is used to retrieve nearby hospitals/clinics.
+# ============================================================
+
+OVERPASS_API_URL = "https://overpass-api.de/api/interpreter"
+HEALTHCARE_SEARCH_RADIUS_M = 5000
+HEALTHCARE_MAX_RESULTS = 10
+
+
+def haversine_distance_km(
+    latitude_1: float,
+    longitude_1: float,
+    latitude_2: float,
+    longitude_2: float,
+) -> float:
+    """Calculate straight-line distance between two GPS coordinates."""
+
+    earth_radius_km = 6371.0088
+
+    lat1 = np.radians(float(latitude_1))
+    lon1 = np.radians(float(longitude_1))
+    lat2 = np.radians(float(latitude_2))
+    lon2 = np.radians(float(longitude_2))
+
+    delta_lat = lat2 - lat1
+    delta_lon = lon2 - lon1
+
+    a = (
+        np.sin(delta_lat / 2.0) ** 2
+        + np.cos(lat1)
+        * np.cos(lat2)
+        * np.sin(delta_lon / 2.0) ** 2
+    )
+
+    return float(
+        2.0 * earth_radius_km * np.arcsin(np.sqrt(a))
+    )
+
+
+@st.cache_data(ttl=600, show_spinner=False)
+def search_nearby_healthcare_facilities(
+    latitude: float,
+    longitude: float,
+    radius_m: int = HEALTHCARE_SEARCH_RADIUS_M,
+) -> list[dict[str, Any]]:
+    """
+    Retrieve nearby hospitals and clinics from OpenStreetMap.
+
+    The Overpass `around` filter is used with the user's GPS coordinates.
+    Results are sorted by straight-line distance and limited to the
+    nearest HEALTHCARE_MAX_RESULTS facilities.
+    """
+
+    query = f"""
+    [out:json][timeout:25];
+
+    (
+        node["amenity"="hospital"](around:{radius_m},{latitude},{longitude});
+        way["amenity"="hospital"](around:{radius_m},{latitude},{longitude});
+        relation["amenity"="hospital"](around:{radius_m},{latitude},{longitude});
+
+        node["amenity"="clinic"](around:{radius_m},{latitude},{longitude});
+        way["amenity"="clinic"](around:{radius_m},{latitude},{longitude});
+        relation["amenity"="clinic"](around:{radius_m},{latitude},{longitude});
+    );
+
+    out center tags;
+    """
+
+    response = requests.post(
+        OVERPASS_API_URL,
+        data=query,
+        headers={
+            "User-Agent": "MedicalCostPredictionResearchApp/1.0"
+        },
+        timeout=35,
+    )
+    response.raise_for_status()
+
+    payload = response.json()
+    elements = payload.get("elements", [])
+    facilities: list[dict[str, Any]] = []
+
+    for element in elements:
+        tags = element.get("tags") or {}
+
+        # Nodes store lat/lon directly; ways/relations normally expose
+        # their representative location through the returned center.
+        element_lat = element.get("lat")
+        element_lon = element.get("lon")
+
+        center = element.get("center") or {}
+        if element_lat is None:
+            element_lat = center.get("lat")
+        if element_lon is None:
+            element_lon = center.get("lon")
+
+        if element_lat is None or element_lon is None:
+            continue
+
+        amenity = str(tags.get("amenity", "")).lower()
+        if amenity not in {"hospital", "clinic"}:
+            continue
+
+        name = str(
+            tags.get("name")
+            or tags.get("official_name")
+            or tags.get("short_name")
+            or "Unnamed healthcare facility"
+        ).strip()
+
+        street = str(tags.get("addr:street", "")).strip()
+        house_number = str(tags.get("addr:housenumber", "")).strip()
+        city = str(
+            tags.get("addr:city")
+            or tags.get("addr:town")
+            or tags.get("addr:village")
+            or ""
+        ).strip()
+        postcode = str(tags.get("addr:postcode", "")).strip()
+
+        address_parts = []
+        if house_number and street:
+            address_parts.append(f"{house_number} {street}")
+        elif street:
+            address_parts.append(street)
+        if city:
+            address_parts.append(city)
+        if postcode:
+            address_parts.append(postcode)
+
+        address = ", ".join(address_parts) or "Address not available"
+
+        phone = str(
+            tags.get("phone")
+            or tags.get("contact:phone")
+            or ""
+        ).strip()
+
+        website = str(
+            tags.get("website")
+            or tags.get("contact:website")
+            or ""
+        ).strip()
+
+        distance_km = haversine_distance_km(
+            latitude,
+            longitude,
+            float(element_lat),
+            float(element_lon),
+        )
+
+        osm_id = f"{element.get('type', 'unknown')}/{element.get('id', '')}"
+
+        facilities.append(
+            {
+                "name": name,
+                "type": "Hospital" if amenity == "hospital" else "Clinic",
+                "latitude": float(element_lat),
+                "longitude": float(element_lon),
+                "distance_km": distance_km,
+                "address": address,
+                "phone": phone,
+                "website": website,
+                "osm_id": osm_id,
+            }
+        )
+
+    # Remove duplicate OSM records while preserving the closest record.
+    unique_facilities: dict[str, dict[str, Any]] = {}
+    for facility in facilities:
+        key = (
+            facility["name"].strip().lower(),
+            round(facility["latitude"], 5),
+            round(facility["longitude"], 5),
+        )
+        existing = unique_facilities.get(str(key))
+        if existing is None or facility["distance_km"] < existing["distance_km"]:
+            unique_facilities[str(key)] = facility
+
+    return sorted(
+        unique_facilities.values(),
+        key=lambda item: item["distance_km"],
+    )[:HEALTHCARE_MAX_RESULTS]
+
+
+def build_google_maps_search_url(
+    name: str,
+    latitude: float,
+    longitude: float,
+) -> str:
+    """Build a Google Maps search URL for a facility."""
+
+    query = quote(
+        f"{name} {latitude},{longitude}"
+    )
+    return (
+        "https://www.google.com/maps/search/?api=1&query="
+        f"{query}"
+    )
+
+
+def build_google_maps_directions_url(
+    latitude: float,
+    longitude: float,
+) -> str:
+    """Build a Google Maps directions URL to a facility."""
+
+    return (
+        "https://www.google.com/maps/dir/?api=1&destination="
+        f"{latitude},{longitude}"
+    )
+
 
 # ============================================================
 # 9. PREDICTION SERVICE
@@ -3892,7 +4113,182 @@ if submitted:
 
 
 # ============================================================
-# 20. FLOATING GEMINI CHATBOT
+# 20. NEARBY HEALTHCARE FACILITIES
+# ============================================================
+# IMPORTANT: The geolocation component itself is the user-triggered
+# button. The browser only asks for location permission when the user
+# clicks it. No GPS data is requested automatically on page load.
+# ============================================================
+
+st.divider()
+st.subheader("🏥 Nearby healthcare facilities")
+st.write(
+    "If you would like to seek further professional consultation, "
+    "use the button below to find nearby hospitals and clinics. "
+    "Your browser will ask for permission to share your location."
+)
+
+st.caption(
+    "Location is used only to search for nearby facilities. "
+    "Facility information is retrieved from OpenStreetMap and may "
+    "be incomplete or outdated."
+)
+
+location = streamlit_geolocation()
+
+if location:
+    location_error = location.get("error")
+    latitude = location.get("latitude")
+    longitude = location.get("longitude")
+
+    if location_error:
+        st.error(
+            "Unable to obtain your location: "
+            f"{location_error}"
+        )
+
+    elif latitude is not None and longitude is not None:
+        try:
+            latitude = float(latitude)
+            longitude = float(longitude)
+
+            if not (-90 <= latitude <= 90 and -180 <= longitude <= 180):
+                raise ValueError("The browser returned invalid coordinates.")
+
+            accuracy = location.get("accuracy")
+            if accuracy is not None:
+                try:
+                    accuracy_m = float(accuracy)
+                    st.caption(
+                        f"Location detected · Approximate accuracy: "
+                        f"{accuracy_m:.0f} m"
+                    )
+                except (TypeError, ValueError):
+                    st.caption("Location detected.")
+            else:
+                st.caption("Location detected.")
+
+            with st.spinner("Searching for nearby hospitals and clinics..."):
+                facilities = search_nearby_healthcare_facilities(
+                    latitude=latitude,
+                    longitude=longitude,
+                    radius_m=HEALTHCARE_SEARCH_RADIUS_M,
+                )
+
+            if not facilities:
+                st.info(
+                    "No hospitals or clinics were found within "
+                    f"{HEALTHCARE_SEARCH_RADIUS_M / 1000:.0f} km. "
+                    "You can try again from another location."
+                )
+            else:
+                st.success(
+                    f"Found {len(facilities)} nearby healthcare facilities."
+                )
+
+                for index, facility in enumerate(facilities, start=1):
+                    with st.container(border=True):
+                        title_col, distance_col = st.columns([4, 1])
+
+                        with title_col:
+                            st.markdown(
+                                f"**{index}. {facility['name']}**"
+                            )
+                            st.caption(facility["type"])
+
+                        with distance_col:
+                            st.metric(
+                                "Distance",
+                                f"{facility['distance_km']:.2f} km",
+                            )
+
+                        st.write(
+                            f"📍 {facility['address']}"
+                        )
+
+                        action_cols = st.columns(3)
+
+                        with action_cols[0]:
+                            st.link_button(
+                                "🗺️ Directions",
+                                build_google_maps_directions_url(
+                                    facility["latitude"],
+                                    facility["longitude"],
+                                ),
+                                use_container_width=True,
+                            )
+
+                        with action_cols[1]:
+                            if facility["phone"]:
+                                phone_url = (
+                                    "tel:"
+                                    + re.sub(
+                                        r"[^0-9+*#]",
+                                        "",
+                                        facility["phone"],
+                                    )
+                                )
+                                st.link_button(
+                                    "📞 Call",
+                                    phone_url,
+                                    use_container_width=True,
+                                )
+                            else:
+                                st.link_button(
+                                    "🔎 Maps",
+                                    build_google_maps_search_url(
+                                        facility["name"],
+                                        facility["latitude"],
+                                        facility["longitude"],
+                                    ),
+                                    use_container_width=True,
+                                )
+
+                        with action_cols[2]:
+                            if facility["website"]:
+                                website_url = facility["website"]
+                                if not website_url.startswith(("http://", "https://")):
+                                    website_url = "https://" + website_url
+                                st.link_button(
+                                    "🌐 Website",
+                                    website_url,
+                                    use_container_width=True,
+                                )
+                            else:
+                                st.link_button(
+                                    "📍 Location",
+                                    build_google_maps_search_url(
+                                        facility["name"],
+                                        facility["latitude"],
+                                        facility["longitude"],
+                                    ),
+                                    use_container_width=True,
+                                )
+
+                st.caption(
+                    "This locator helps you identify nearby facilities. "
+                    "It does not assess which facility is medically appropriate "
+                    "for your condition, and it does not provide diagnosis or treatment."
+                )
+
+        except requests.RequestException as error:
+            st.error(
+                "The healthcare-facility search service is temporarily "
+                "unavailable. Please try again later."
+            )
+            with st.expander("Technical error"):
+                st.code(str(error))
+
+        except Exception as error:
+            st.error(
+                "The nearby healthcare search could not be completed."
+            )
+            with st.expander("Technical error"):
+                st.code(str(error))
+
+
+# ============================================================
+ # 21. FLOATING GEMINI CHATBOT
 # ============================================================
 #
 # Streamlit does not provide a native floating chat widget.
@@ -4176,7 +4572,7 @@ with st.container(
 
 
 # ============================================================
-# 21. FOOTER
+# 22. FOOTER
 # ============================================================
 
 st.divider()
