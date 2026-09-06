@@ -1158,31 +1158,34 @@ with tab_locator:
             horizontal=True,
         )
 
-    # 2. INLINE ACTION: HINT POINTING DIRECTLY TO THE LOCATOR BUTTON
+   # 2. INLINE ACTION: TIGHTLY PAIRED HINT & LOCATOR BUTTON
     st.markdown(
         """
         <style>
-        div[data-testid="stHorizontalBlock"] {
+        /* Force Streamlit horizontal row to minimize gaps and center elements */
+        div[data-testid="stHorizontalBlock"]:has(.locator-hint-pill) {
             align-items: center !important;
+            gap: 8px !important;
         }
 
         .locator-trigger-container {
             display: flex;
             align-items: center;
-            margin: 0.4rem 0;
-            width: fit-content;
+            margin: 0;
+            width: 100%;
+            justify-content: flex-end;
         }
 
         .locator-hint-pill {
             display: inline-flex;
             align-items: center;
-            gap: 8px;
-            padding: 0.55rem 1.15rem;
+            gap: 6px;
+            padding: 0.52rem 1rem;
             background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
             color: #1565c0;
             border: 1.5px solid #90caf9;
             border-radius: 14px;
-            font-size: 0.98rem;
+            font-size: 0.96rem;
             font-weight: 780;
             letter-spacing: 0.2px;
             box-shadow: 0 4px 12px rgba(33, 150, 243, 0.14);
@@ -1191,14 +1194,14 @@ with tab_locator:
         }
 
         .locator-finger-icon {
-            font-size: 1.3rem;
+            font-size: 1.25rem;
             display: inline-block;
             animation: pointerBounce 1.4s ease-in-out infinite;
         }
 
         @keyframes pointerBounce {
             0%, 100% { transform: translateX(0); }
-            50% { transform: translateX(5px); }
+            50% { transform: translateX(4px); }
         }
 
         div[data-testid="stCustomComponentV1"] {
@@ -1207,6 +1210,7 @@ with tab_locator:
             margin: 0 !important;
             padding: 0 !important;
             height: 38px !important;
+            width: 38px !important;
         }
 
         iframe[title="streamlit_geolocation.streamlit_geolocation"] {
@@ -1222,7 +1226,8 @@ with tab_locator:
         unsafe_allow_html=True,
     )
 
-    col_hint, col_button, _ = st.columns([2.4, 0.6, 5], vertical_alignment="center")
+    # Tight auto-fit columns with the trailing spacer absorbing the rest of the line
+    col_hint, col_button, _ = st.columns([1.75, 0.35, 5.9], vertical_alignment="center")
 
     with col_hint:
         st.markdown(
