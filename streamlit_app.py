@@ -1158,122 +1158,79 @@ with tab_prediction:
             st.error("Prediction failed.")
             st.exception(error)
 
-# ============================================================
-# TAB 2: NEARBY HEALTHCARE FACILITIES
-# ============================================================
-
-with tab_locator:
-    st.markdown("### 🏥 Real-Time Healthcare Provider Locator")
-    st.write("Configure your search preferences first, then click **Start Searching** below.")
-
-    # 1. PRIORITIZE SEARCH FILTERS FIRST
-    filter_col1, filter_col2 = st.columns(2)
-    with filter_col1:
-        radius_choice = st.select_slider(
-            "Search Radius (Kilometers)",
-            options=[1, 3, 5, 10, 15],
-            value=5,
-        )
-    with filter_col2:
-        type_filter = st.radio(
-            "Show Facilities",
-            ["All", "Hospitals Only", "Clinics Only"],
-            horizontal=True,
-        )
-
-    st.markdown("##### Detect Location & Start Searching")
-    st.caption("Click the button below to retrieve facilities within your specified criteria.")
-
-   # 2. INLINE ROW WITH GUIDANCE ARROW
+# 2. INLINE ACTION: HINT POINTING DIRECTLY TO THE LOCATOR BUTTON
     st.markdown(
         """
         <style>
-        .search-inline-row {
+        .locator-trigger-container {
             display: flex;
             align-items: center;
-            gap: 12px;
-            margin: 0.8rem 0 1.4rem 0;
-            flex-wrap: wrap;
+            gap: 14px;
+            margin: 0.8rem 0 1.5rem 0;
         }
 
-        .search-pill-label {
+        .locator-hint-pill {
             display: inline-flex;
             align-items: center;
             gap: 8px;
-            padding: 0.65rem 1.35rem;
+            padding: 0.6rem 1.25rem;
             background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
             color: #1565c0;
             border: 1.5px solid #90caf9;
             border-radius: 14px;
-            font-size: 1.02rem;
+            font-size: 1rem;
             font-weight: 780;
             letter-spacing: 0.2px;
             box-shadow: 0 4px 12px rgba(33, 150, 243, 0.14);
             user-select: none;
+            white-space: nowrap;
         }
 
-        .search-guide-hint {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            font-size: 0.92rem;
-            font-weight: 750;
-            color: #1e88e5;
-            background: #f0f7ff;
-            border: 1px dashed #90caf9;
-            padding: 0.45rem 0.85rem;
-            border-radius: 10px;
-        }
-
-        .search-guide-arrow {
+        .locator-finger-icon {
+            font-size: 1.35rem;
             display: inline-block;
-            font-size: 1.25rem;
-            animation: bounceRight 1.4s ease-in-out infinite;
+            animation: pointerBounce 1.4s ease-in-out infinite;
         }
 
-        @keyframes bounceRight {
+        @keyframes pointerBounce {
             0%, 100% { transform: translateX(0); }
             50% { transform: translateX(5px); }
         }
 
-        /* Clean up component iframe alignment */
-        div[data-testid="stCustomComponentV1"]:has(iframe[title="streamlit_geolocation.streamlit_geolocation"]) {
-            display: flex !important;
+        /* Enforce horizontal alignment and remove stray iframe borders */
+        div[data-testid="stHorizontalBlock"]:has(.locator-trigger-container) {
             align-items: center !important;
-            margin: 0 !important;
-            padding: 0 !important;
         }
 
         iframe[title="streamlit_geolocation.streamlit_geolocation"] {
-            border-radius: 8px !important;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12) !important;
+            display: block !important;
+            border: none !important;
+            background: transparent !important;
+            height: 38px !important;
         }
         </style>
         """,
         unsafe_allow_html=True,
     )
 
-    # Use compact columns to force the items on the exact same row
-    col_label, col_btn, _ = st.columns([auto_col := 3, 1, 4])
+    col_hint, col_button, _ = st.columns([auto_hint := 2.2, auto_btn := 0.8, auto_space := 5], vertical_alignment="center")
 
-    with col_label:
+    with col_hint:
         st.markdown(
             """
-            <div class="search-inline-row">
-                <div class="search-pill-label">
-                    <span>📍 Start Searching:</span>
-                </div>
-                <div class="search-guide-hint">
-                    <span>Click this button</span>
-                    <span class="search-guide-arrow">👉</span>
+            <div class="locator-trigger-container">
+                <div class="locator-hint-pill">
+                    <span>Click to search nearby</span>
+                    <span class="locator-finger-icon">👉</span>
                 </div>
             </div>
             """,
             unsafe_allow_html=True,
         )
 
-    with col_btn:
+    with col_button:
         user_loc = streamlit_geolocation()
+        
         
     # 3. FACILITY SEARCH & MAP PRESENTATION
     if user_loc and user_loc.get("latitude") is not None and user_loc.get("longitude") is not None:
