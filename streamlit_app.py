@@ -1185,37 +1185,72 @@ with tab_locator:
     st.caption("Click the button below to retrieve facilities within your specified criteria.")
 
     # 2. BEAUTIFIED LIGHT-BLUE BUTTON (NATIVE STREAMLIT GEOLOCATION RE-STYLED)
+# 2. BEAUTIFIED GEOLOCATION ACTION PILL
     st.markdown(
         """
         <style>
-        /* Container for the locator trigger */
-        div[data-testid="stCustomComponentV1"]:has(iframe[title="streamlit_geolocation.streamlit_geolocation"]) {
-            display: inline-block !important;
-            margin: 0.5rem 0 1.2rem 0 !important;
+        .geo-btn-card {
+            display: inline-flex;
+            align-items: center;
+            justify-content: flex-start;
+            gap: 12px;
+            padding: 8px 24px 8px 16px;
+            border-radius: 16px;
+            background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+            border: 1.5px solid #90caf9;
+            box-shadow: 0 4px 14px rgba(33, 150, 243, 0.16);
+            margin: 0.6rem 0 1.4rem 0;
+            transition: all 180ms ease;
         }
 
-        /* Re-style the component iframe directly into the Light Blue button */
-        iframe[title="streamlit_geolocation.streamlit_geolocation"] {
-            border: 1px solid #90caf9 !important;
-            border-radius: 14px !important;
-            background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%) !important;
-            box-shadow: 0 4px 14px rgba(33, 150, 243, 0.18) !important;
-            width: 220px !important;
-            height: 50px !important;
-            transition: all 160ms ease !important;
-        }
-
-        iframe[title="streamlit_geolocation.streamlit_geolocation"]:hover {
+        .geo-btn-card:hover {
             transform: translateY(-2px);
-            border-color: #64b5f6 !important;
-            box-shadow: 0 6px 18px rgba(33, 150, 243, 0.28) !important;
+            box-shadow: 0 6px 20px rgba(33, 150, 243, 0.26);
+            border-color: #64b5f6;
+        }
+
+        .geo-btn-label {
+            font-size: 1.05rem;
+            font-weight: 780;
+            color: #1565c0;
+            letter-spacing: 0.2px;
+            user-select: none;
+            white-space: nowrap;
+        }
+
+        /* Clean up iframe container constraints */
+        .geo-btn-card div[data-testid="stCustomComponentV1"] {
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            width: 36px !important;
+            height: 36px !important;
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+
+        /* Modernize and softly round the locator icon frame */
+        .geo-btn-card iframe[title="streamlit_geolocation.streamlit_geolocation"] {
+            width: 36px !important;
+            height: 36px !important;
+            border-radius: 10px !important;
+            border: none !important;
+            background: #ffffff !important;
+            box-shadow: 0 2px 6px rgba(21, 101, 192, 0.2) !important;
+            cursor: pointer !important;
+            overflow: hidden !important;
         }
         </style>
+
+        <div class="geo-btn-card">
+            <span class="geo-btn-label">📍 Start Searching:</span>
         """,
         unsafe_allow_html=True,
     )
 
     user_loc = streamlit_geolocation()
+
+    st.markdown("</div>", unsafe_allow_html=True)
 
     # 3. FACILITY SEARCH & MAP PRESENTATION
     if user_loc and user_loc.get("latitude") is not None and user_loc.get("longitude") is not None:
