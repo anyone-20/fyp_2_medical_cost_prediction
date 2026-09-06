@@ -1182,15 +1182,15 @@ with tab_locator:
             horizontal=True,
         )
 
-    # 2. SEAMLESS "START SEARCHING" BUTTON (ONLY ONE GEOLOCATION CALL IN THE ENTIRE SCRIPT)
+ # 2. SEAMLESS LIGHT BLUE "START SEARCHING" BUTTON (ICON FULLY HIDDEN)
     st.markdown(
         """
         <style>
         .custom-search-container {
             margin: 1.2rem 0 1.6rem 0;
+            display: inline-block;
         }
-       
-      .start-search-btn-wrapper {
+        .start-search-btn-wrapper {
             position: relative;
             display: inline-flex;
             align-items: center;
@@ -1216,8 +1216,9 @@ with tab_locator:
             border-color: #64b5f6;
             box-shadow: 0 8px 22px rgba(33, 150, 243, 0.28);
         }
-        
-        .start-search-btn-wrapper div[data-testid="stCustomComponentV1"] {
+        /* Make the geolocation iframe and its container 100% transparent and cover the entire pill */
+        .start-search-btn-wrapper div[data-testid="stCustomComponentV1"],
+        .start-search-btn-wrapper iframe {
             position: absolute !important;
             top: 0 !important;
             left: 0 !important;
@@ -1225,15 +1226,11 @@ with tab_locator:
             height: 100% !important;
             margin: 0 !important;
             padding: 0 !important;
-            opacity: 0.0001 !important;
-            z-index: 10 !important;
-            cursor: pointer !important;
-        }
-        .start-search-btn-wrapper iframe {
-            width: 100% !important;
-            height: 100% !important;
             border: none !important;
+            outline: none !important;
+            opacity: 0.001 !important;
             cursor: pointer !important;
+            z-index: 10 !important;
         }
         </style>
         <div class="custom-search-container">
