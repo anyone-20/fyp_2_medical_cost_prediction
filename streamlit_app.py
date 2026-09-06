@@ -1222,18 +1222,53 @@ with tab_locator:
         else:
             facilities = raw_facilities
 
-        if not facilities:
+     if not facilities:
             st.info(f"No {type_filter.lower()} found within {radius_choice} km. Try expanding the search radius.")
         else:
             st.markdown(f"##### Showing {len(facilities)} Medical Facilities Nearby")
 
-          map_data = pd.DataFrame(
+            map_data = pd.DataFrame(
                 [{"lat": f["lat"], "lon": f["lon"]} for f in facilities] + [{"lat": u_lat, "lon": u_lon}]
             )
-            # Center the map with narrower side margins
-            _, map_col, _ = st.columns([1, 4, 1])
-            with map_col:
-                st.map(map_data, zoom=12, height=260, use_container_width=True)
+            st.map(map_data, zoom=12, height=280, use_container_width=True)
+
+            for i, fac in enumerate(facilities, start=1):
+                badge_class = "badge-hospital" if fac["type"] == "Hospital" else "badge-clinic"
+                st.markdown(
+                    f"""
+                    <div class="facility-card">
+                        <div class="facility-header">
+                            <div>
+                                <h4 class="facility-name">{i}. {fac['name']}</h4>
+                                <span class="{badge_class}">{fac['type']}</span>
+                                <div class="facility-address">📍 {fac['address']}</div>
+                            </div>
+                            <div class="distance-tag">
+                                🚗 {fac['distance_km']:.2f} km
+                            </div>
+                        </div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+
+                b1, b2, b3 = st.columns(3)
+                with b1:
+                    dir_url = f"https://www.google.com/maps/dir/?api=1&destination={fac['lat']},{fac['lon']}"
+                    st.link_button("🗺️ Get Directions", dir_url, use_container_width=True)
+                with b2:
+                    search_url = f"https://www.google.com/maps/search/?api=1&query={quote(fac['name'] + ' ' + str(fac['lat']) + ',' + str(fac['lon']))}"
+                    st.link_button("🔍 Google Maps", search_url, use_container_width=True)
+                with b3:
+                    if fac["phone"]:
+                        clean_phone = re.sub(r"[^0-9+]", "", fac["phone"])
+                        st.link_button("📞 Call Clinic", f"tel:{clean_phone}", use_container_width=True)
+                    elif fac["website"]:
+                        site = fac["website"] if fac["website"].startswith("http") else f"https://{fac['website']}"
+                        st.link_button("🌐 Website", site, use_container_width=True)
+                    else:
+                        st.button("No Phone Listed", disabled=True, key=f"dis_fac_{i}", use_container_width=True)
+                        
 
             for i, fac in enumerate(facilities, start=1):
                 badge_class = "badge-hospital" if fac["type"] == "Hospital" else "badge-clinic"
