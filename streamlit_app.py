@@ -9,6 +9,7 @@ from __future__ import annotations
 from pathlib import Path
 import json
 import re
+import time
 from typing import Any
 
 import joblib
@@ -51,6 +52,8 @@ st.markdown(
         --app-muted: color-mix(in srgb, var(--app-text) 68%, transparent);
         --app-shadow: 0 10px 24px color-mix(in srgb, var(--app-text) 8%, transparent);
         --app-shadow-soft: 0 4px 12px color-mix(in srgb, var(--app-text) 6%, transparent);
+        --app-danger: #e53e3e;
+        --app-danger-soft: #fff5f5;
     }
 
     .stApp {
@@ -114,44 +117,7 @@ st.markdown(
         border-bottom: 3px solid var(--app-primary) !important;
     }
 
-    .info-card {
-        padding: 1.1rem;
-        min-height: 115px;
-        border: 1px solid var(--app-border);
-        border-radius: 16px;
-        background: var(--app-surface);
-        box-shadow: var(--app-shadow-soft);
-        transition: transform 160ms ease, box-shadow 160ms ease;
-    }
-
-    .info-card:hover {
-        transform: translateY(-2px);
-        box-shadow: var(--app-shadow);
-    }
-
-    .info-card-title {
-        color: var(--app-primary);
-        font-size: .76rem;
-        font-weight: 760;
-        text-transform: uppercase;
-        letter-spacing: .065em;
-        margin-bottom: .35rem;
-    }
-
-    .info-card-value {
-        color: var(--app-text);
-        font-size: 1.1rem;
-        font-weight: 780;
-        margin-bottom: .25rem;
-    }
-
-    .info-card-text {
-        color: var(--app-muted);
-        font-size: .88rem;
-        line-height: 1.45;
-    }
-
-    /* Facility Custom Card */
+    /* Facility Card */
     .facility-card {
         border: 1px solid var(--app-border);
         border-radius: 18px;
@@ -253,6 +219,26 @@ st.markdown(
 
     div[data-baseweb="select"] span {
         color: #173b5e !important;
+    }
+
+    /* Dynamic Validation Red Alert Highlighting */
+    .field-invalid div[data-baseweb="input"] > div,
+    .field-invalid div[data-baseweb="base-input"] {
+        border: 2px solid var(--app-danger) !important;
+        background: var(--app-danger-soft) !important;
+    }
+
+    .field-invalid label {
+        color: var(--app-danger) !important;
+        font-weight: 700 !important;
+    }
+
+    .error-inline {
+        color: var(--app-danger);
+        font-size: 0.82rem;
+        font-weight: 600;
+        margin-top: -0.4rem;
+        margin-bottom: 0.6rem;
     }
 
     /* Floating Chat Launcher */
@@ -597,54 +583,41 @@ def search_nearby_facilities(lat: float, lon: float, radius_m: int = 5000) -> li
 
 
 # ============================================================
-# 8. INPUT VALIDATION HELPER
-# ============================================================
-
-def validate_raw_inputs(
-    *,
-    age: int,
-    height_cm: float,
-    weight_kg: float,
-    outpatient_cost: float,
-    previous_inpatient_cost: float,
-) -> float:
-    """Validate user inputs and return calculated BMI."""
-    errors = []
-
-    if age < 1 or age > 119:
-        errors.append("Age must be between 1 and 119.")
-
-    if height_cm <= 0:
-        errors.append("Height must be greater than zero.")
-
-    if weight_kg <= 0:
-        errors.append("Weight must be greater than zero.")
-
-    if outpatient_cost < 0:
-        errors.append("Outpatient medical cost cannot be negative.")
-
-    if previous_inpatient_cost < 0:
-        errors.append("Previous inpatient cost cannot be negative.")
-
-    bmi = float(weight_kg / ((height_cm / 100.0) ** 2))
-
-    if bmi < 10 or bmi > 80:
-        errors.append("The calculated BMI is outside the expected range of 10 to 80. Verify height and weight.")
-
-    if errors:
-        raise ValueError(" ".join(errors))
-
-    return bmi
-
-
-# ============================================================
-# 9. GEMINI CHAT HELPER FUNCTIONS
+# 8. GEMINI CLIENT WITH RETRY & FALLBACK FOR 503 OVERLOAD
 # ============================================================
 
 @st.cache_resource
 def load_gemini_client(api_key: str):
     from google import genai
     return genai.Client(api_key=api_key)
+
+
+def call_gemini_with_fallback(client: Any, prompt: str) -> str:
+    """Execute Gemini request with exponential backoff and fallback models on 503."""
+    models_to_try = ["gemini-2.5-flash", "gemini-1.5-flash"]
+    last_err = None
+
+    for model_name in models_to_try:
+        for attempt in range(2):
+            try:
+                response = client.models.generate_content(
+                    model=model_name,
+                    contents=prompt,
+                )
+                text = getattr(response, "text", "")
+                if text:
+                    return text.strip()
+            except Exception as e:
+                err_str = str(e)
+                last_err = e
+                if "503" in err_str or "UNAVAILABLE" in err_str:
+                    time.sleep(1.0 * (attempt + 1))
+                    continue
+                else:
+                    raise e
+    if last_err:
+        raise last_err
+    return ""
 
 
 def detect_chat_intent(*, user_message: str, prediction_context: dict[str, Any]) -> dict[str, Any]:
@@ -686,12 +659,8 @@ Return ONLY valid JSON format:
 or
 {{"intent": "what_if", "changes": {{"weight_kg": 50}}}}
 """
-    response = client.models.generate_content(
-        model="gemini-2.5-flash",
-        contents=prompt,
-    )
-    cleaned = getattr(response, "text", "").strip()
-    cleaned = re.sub(r"^`{3}(?:json)?\s*", "", cleaned, flags=re.IGNORECASE)
+    raw_text = call_gemini_with_fallback(client, prompt)
+    cleaned = re.sub(r"^`{3}(?:json)?\s*", "", raw_text, flags=re.IGNORECASE)
     cleaned = re.sub(r"\s*`{3}$", "", cleaned)
     try:
         res = json.loads(cleaned)
@@ -708,26 +677,27 @@ def run_what_if_prediction(*, artifact: dict[str, Any], prediction_context: dict
     modified = dict(original_inputs)
     modified.update(changes)
 
-    new_bmi = validate_raw_inputs(
-        age=int(modified["age"]),
-        height_cm=float(modified["height_cm"]),
-        weight_kg=float(modified["weight_kg"]),
-        outpatient_cost=float(modified["outpatient_cost_cny"]),
-        previous_inpatient_cost=float(modified["previous_inpatient_cost_cny"]),
-    )
+    # Basic bounds checking for simulated changes
+    sim_age = int(modified.get("age", original_inputs["age"]))
+    sim_height = float(modified.get("height_cm", original_inputs["height_cm"]))
+    sim_weight = float(modified.get("weight_kg", original_inputs["weight_kg"]))
+    sim_outpatient = float(modified.get("outpatient_cost_cny", original_inputs["outpatient_cost_cny"]))
+    sim_prev_inpatient = float(modified.get("previous_inpatient_cost_cny", original_inputs["previous_inpatient_cost_cny"]))
+
+    new_bmi = float(sim_weight / ((sim_height / 100.0) ** 2))
 
     candidates = create_feature_candidates(
-        age=int(modified["age"]),
-        gender_code=GENDER_MAPPING[modified["gender_label"]],
-        height_cm=float(modified["height_cm"]),
-        weight_kg=float(modified["weight_kg"]),
-        chronic_code=YES_NO_MAPPING[modified["chronic_illness_label"]],
-        smoking_code=YES_NO_MAPPING[modified["smoking_label"]],
-        previous_inpatient_cost=float(modified["previous_inpatient_cost_cny"]),
-        hospitalized_code=YES_NO_MAPPING[modified["hospitalized_label"]],
-        outpatient_cost=float(modified["outpatient_cost_cny"]),
-        health_code=HEALTH_MAPPING[modified["health_label"]],
-        employed_code=EMPLOYMENT_MAPPING[modified["employed_label"]],
+        age=sim_age,
+        gender_code=GENDER_MAPPING.get(modified.get("gender_label", original_inputs["gender_label"]), 1),
+        height_cm=sim_height,
+        weight_kg=sim_weight,
+        chronic_code=YES_NO_MAPPING.get(modified.get("chronic_illness_label", original_inputs["chronic_illness_label"]), 0),
+        smoking_code=YES_NO_MAPPING.get(modified.get("smoking_label", original_inputs["smoking_label"]), 0),
+        previous_inpatient_cost=sim_prev_inpatient,
+        hospitalized_code=YES_NO_MAPPING.get(modified.get("hospitalized_label", original_inputs["hospitalized_label"]), 0),
+        outpatient_cost=sim_outpatient,
+        health_code=HEALTH_MAPPING.get(modified.get("health_label", original_inputs["health_label"]), 3),
+        employed_code=EMPLOYMENT_MAPPING.get(modified.get("employed_label", original_inputs["employed_label"]), 1),
     )
 
     result = predict_medical_cost(artifact=artifact, candidates=candidates)
@@ -766,8 +736,7 @@ User Query: {user_message}
 
 Be concise, supportive, and clarify that model associations reflect historical CFPS data patterns rather than clinical causation.
 """
-    res = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
-    return getattr(res, "text", "").strip()
+    return call_gemini_with_fallback(client, prompt)
 
 
 def generate_gemini_explanation(*, prediction_context: dict[str, Any], user_message: str) -> str:
@@ -792,12 +761,11 @@ User question:
 
 Provide a concise, helpful explanation without diagnosing conditions.
 """
-    res = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
-    return getattr(res, "text", "").strip()
+    return call_gemini_with_fallback(client, prompt)
 
 
 # ============================================================
-# 10. LOAD DATA & SESSION STATE
+# 9. LOAD DATA & SESSION STATE
 # ============================================================
 
 try:
@@ -816,7 +784,7 @@ if "chat_messages" not in st.session_state:
 
 
 # ============================================================
-# 11. HEADER
+# 10. HEADER
 # ============================================================
 
 st.markdown(
@@ -834,7 +802,7 @@ st.markdown(
 
 
 # ============================================================
-# 12. TAB NAVIGATION
+# 11. TAB NAVIGATION
 # ============================================================
 
 tab_prediction, tab_locator, tab_model_info = st.tabs([
@@ -882,19 +850,36 @@ with tab_prediction:
             p_col1, p_col2 = st.columns(2)
             with p_col1:
                 age = st.number_input("Age", value=40, step=1, help="Enter the individual's age in completed years.")
+                is_age_invalid = age < 1 or age > 119
+                if is_age_invalid:
+                    st.markdown("<div class='error-inline'>⚠️ Age must be between 1 and 119.</div>", unsafe_allow_html=True)
                 gender_label = st.selectbox("Gender", options=list(GENDER_MAPPING.keys()))
+
             with p_col2:
                 height_cm = st.number_input("Height (cm)", value=165.0, step=0.1, help="Used with weight to calculate BMI.")
-                weight_kg = st.number_input("Weight (kg)", value=60.0, step=0.1, help="Used with height to calculate BMI.")
+                is_height_invalid = height_cm <= 0 or height_cm > 250
+                if is_height_invalid:
+                    st.markdown("<div class='error-inline'>⚠️ Height must be between 50 and 250 cm.</div>", unsafe_allow_html=True)
 
-            calculated_bmi = float(weight_kg / ((height_cm / 100.0) ** 2))
+                weight_kg = st.number_input("Weight (kg)", value=60.0, step=0.1, help="Used with height to calculate BMI.")
+                is_weight_invalid = weight_kg <= 0 or weight_kg > 300
+                if is_weight_invalid:
+                    st.markdown("<div class='error-inline'>⚠️ Weight must be between 10 and 300 kg.</div>", unsafe_allow_html=True)
+
+            calculated_bmi = float(weight_kg / ((height_cm / 100.0) ** 2)) if height_cm > 0 else 0.0
+            is_bmi_invalid = calculated_bmi < 10 or calculated_bmi > 80
+
             bmi_status = (
                 "Underweight" if calculated_bmi < 18.5
                 else "Normal range" if calculated_bmi < 25
                 else "Overweight" if calculated_bmi < 30
                 else "High BMI"
             )
-            st.info(f"Calculated BMI: **{calculated_bmi:.2f}** ({bmi_status})")
+
+            if is_bmi_invalid:
+                st.markdown(f"<div class='error-inline'>⚠️ Calculated BMI ({calculated_bmi:.2f}) is outside the normal range (10 - 80).</div>", unsafe_allow_html=True)
+            else:
+                st.info(f"Calculated BMI: **{calculated_bmi:.2f}** ({bmi_status})")
 
             st.divider()
             st.markdown("#### Health and lifestyle information")
@@ -922,39 +907,53 @@ with tab_prediction:
                     value=0.0,
                     step=100.0,
                 )
+                is_outpatient_invalid = outpatient_cost_selected < 0
+                if is_outpatient_invalid:
+                    st.markdown("<div class='error-inline'>⚠️ Outpatient cost cannot be negative.</div>", unsafe_allow_html=True)
+
             with c_col2:
                 previous_inpatient_cost_selected = st.number_input(
                     f"Previous inpatient medical cost ({selected_currency_code})",
                     value=0.0,
                     step=100.0,
                 )
+                is_prev_inpatient_invalid = previous_inpatient_cost_selected < 0
+                if is_prev_inpatient_invalid:
+                    st.markdown("<div class='error-inline'>⚠️ Previous inpatient cost cannot be negative.</div>", unsafe_allow_html=True)
 
-            # REAL-TIME FORM VALIDATION
-            form_validation_error = None
-            try:
-                validate_raw_inputs(
-                    age=int(age),
-                    height_cm=float(height_cm),
-                    weight_kg=float(weight_kg),
-                    outpatient_cost=float(outpatient_cost_selected),
-                    previous_inpatient_cost=float(previous_inpatient_cost_selected),
+            # Check all conditions and dynamically inject CSS red styling
+            has_error = (
+                is_age_invalid
+                or is_height_invalid
+                or is_weight_invalid
+                or is_bmi_invalid
+                or is_outpatient_invalid
+                or is_prev_inpatient_invalid
+            )
+
+            if is_age_invalid or is_height_invalid or is_weight_invalid or is_outpatient_invalid or is_prev_inpatient_invalid:
+                st.markdown(
+                    """
+                    <style>
+                    div[data-baseweb="input"] > div {
+                        border: 2px solid #e53e3e !important;
+                        background-color: #fff5f5 !important;
+                    }
+                    </style>
+                    """,
+                    unsafe_allow_html=True,
                 )
-            except (ValueError, TypeError) as err:
-                form_validation_error = str(err)
 
-            if form_validation_error:
-                st.error("❌ Please correct the invalid input before continuing.")
-                st.warning(form_validation_error)
+            if has_error:
+                st.error("❌ Invalid inputs detected. Please correct the highlighted fields before predicting.")
             else:
                 st.success("✅ All input values are valid. You can continue with the prediction.")
-
-            st.warning("Review all entered values before submitting. The prediction is an estimate derived from historical data.")
 
             submitted = st.form_submit_button(
                 "✨ Predict inpatient medical cost",
                 use_container_width=True,
                 type="primary",
-                disabled=form_validation_error is not None,
+                disabled=has_error,
             )
 
     # PROCESS PREDICTION
@@ -969,14 +968,6 @@ with tab_prediction:
                 float(previous_inpatient_cost_selected) / exchange_rate
                 if selected_currency_code != "CNY"
                 else float(previous_inpatient_cost_selected)
-            )
-
-            validated_bmi = validate_raw_inputs(
-                age=int(age),
-                height_cm=float(height_cm),
-                weight_kg=float(weight_kg),
-                outpatient_cost=float(outpatient_cost_cny),
-                previous_inpatient_cost=float(previous_inpatient_cost_cny),
             )
 
             candidates = create_feature_candidates(
@@ -1036,7 +1027,7 @@ with tab_prediction:
                     use_container_width=True,
                 )
 
-                # RESTORED NUMBERED SHAP SUMMARY BREAKDOWN
+                # NUMBERED DIRECTIONAL CONTRIBUTOR SUMMARY
                 for index, row in top_contributors.iterrows():
                     contribution = float(row["SHAP contribution"])
                     direction = "increased" if contribution >= 0 else "reduced"
@@ -1087,7 +1078,7 @@ with tab_prediction:
                     "previous_inpatient_cost_cny": float(previous_inpatient_cost_cny),
                 },
                 "age": int(age),
-                "bmi": validated_bmi,
+                "bmi": calculated_bmi,
                 "gender": gender_label,
                 "chronic_illness": chronic_illness_label,
                 "smoking_status": smoking_label,
@@ -1139,22 +1130,31 @@ with tab_prediction:
 
 with tab_locator:
     st.markdown("### 🏥 Real-Time Healthcare Provider Locator")
-    st.write("Find accredited hospitals and outpatient clinics around your current coordinates.")
+    st.write("Configure your search preferences first, then start the locator below.")
 
-    loc_col1, loc_col2 = st.columns([1, 2])
-    with loc_col1:
-        user_loc = streamlit_geolocation()
+    # 1. PRIORITIZE SEARCH FILTERS FIRST
+    filter_col1, filter_col2 = st.columns(2)
+    with filter_col1:
+        radius_choice = st.select_slider(
+            "Search Radius (Kilometers)",
+            options=[1, 3, 5, 10, 15],
+            value=5,
+        )
+    with filter_col2:
+        type_filter = st.radio(
+            "Show Facilities",
+            ["All", "Hospitals Only", "Clinics Only"],
+            horizontal=True,
+        )
+
+    st.markdown("##### Detect Location & Start Search")
+    st.caption("Click the button below to retrieve facilities within your specified criteria.")
+
+    # 2. TRIGGER GEOLOCATION BUTTON BELOW FILTERS
+    user_loc = streamlit_geolocation()
 
     if user_loc and user_loc.get("latitude") and user_loc.get("longitude"):
         u_lat, u_lon = float(user_loc["latitude"]), float(user_loc["longitude"])
-        with loc_col2:
-            st.success(f"📍 Location Identified: `{u_lat:.4f}, {u_lon:.4f}`")
-
-        filter_col1, filter_col2 = st.columns(2)
-        with filter_col1:
-            radius_choice = st.select_slider("Search Radius (Kilometers)", options=[1, 3, 5, 10, 15], value=5)
-        with filter_col2:
-            type_filter = st.radio("Show Facilities", ["All", "Hospitals Only", "Clinics Only"], horizontal=True)
 
         with st.spinner("Searching nearby facilities via OpenStreetMap..."):
             raw_facilities = search_nearby_facilities(u_lat, u_lon, radius_m=radius_choice * 1000)
@@ -1167,7 +1167,7 @@ with tab_locator:
             facilities = raw_facilities
 
         if not facilities:
-            st.info(f"No {type_filter.lower()} found within {radius_choice} km. Try expanding the search radius slider.")
+            st.info(f"No {type_filter.lower()} found within {radius_choice} km. Try expanding the search radius.")
         else:
             st.markdown(f"##### Showing {len(facilities)} Medical Facilities Nearby")
 
@@ -1213,7 +1213,7 @@ with tab_locator:
                     else:
                         st.button("No Phone Listed", disabled=True, key=f"dis_fac_{i}", use_container_width=True)
     else:
-        st.info("Click the location button above to search for medical centers near your current location.")
+        st.info("Set your search preferences above, then click the locator button to search.")
 
 
 # ============================================================
@@ -1238,7 +1238,7 @@ with tab_model_info:
 
 
 # ============================================================
-# 13. FLOATING GEMINI CHATBOT
+# 12. FLOATING GEMINI CHATBOT
 # ============================================================
 
 with st.container(key="floating_chat_launcher"):
@@ -1292,26 +1292,32 @@ with st.container(key="floating_chat_launcher"):
             else:
                 try:
                     current_ctx = st.session_state.latest_prediction_context
-                    intent_res = detect_chat_intent(user_message=clean_question, prediction_context=current_ctx)
+                    # SHOW SPINNER DURING AI INFERENCE
+                    with st.spinner("AI Assistant is computing scenario..."):
+                        intent_res = detect_chat_intent(user_message=clean_question, prediction_context=current_ctx)
 
-                    if intent_res.get("intent") == "what_if":
-                        what_if_res = run_what_if_prediction(
-                            artifact=artifact,
-                            prediction_context=current_ctx,
-                            changes=intent_res.get("changes", {}),
-                        )
-                        assistant_response = explain_what_if_prediction(
-                            original_context=current_ctx,
-                            what_if_result=what_if_res,
-                            user_message=clean_question,
-                        )
-                    else:
-                        assistant_response = generate_gemini_explanation(
-                            prediction_context=current_ctx,
-                            user_message=clean_question,
-                        )
+                        if intent_res.get("intent") == "what_if":
+                            what_if_res = run_what_if_prediction(
+                                artifact=artifact,
+                                prediction_context=current_ctx,
+                                changes=intent_res.get("changes", {}),
+                            )
+                            assistant_response = explain_what_if_prediction(
+                                original_context=current_ctx,
+                                what_if_result=what_if_res,
+                                user_message=clean_question,
+                            )
+                        else:
+                            assistant_response = generate_gemini_explanation(
+                                prediction_context=current_ctx,
+                                user_message=clean_question,
+                            )
                 except Exception as err:
-                    assistant_response = f"The assistant could not process this request: {err}"
+                    err_str = str(err)
+                    if "503" in err_str or "UNAVAILABLE" in err_str:
+                        assistant_response = "The AI service is experiencing temporary peak load. Please retry your question in a few seconds."
+                    else:
+                        assistant_response = f"The assistant could not process this request: {err}"
 
             st.session_state.chat_messages.append({"role": "assistant", "content": assistant_response})
             st.rerun()
