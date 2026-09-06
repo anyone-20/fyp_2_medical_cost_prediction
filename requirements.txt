@@ -11,3 +11,4 @@ xgboost
 shap
 google-genai>=2.3.0
 requests
+streamlit-geolocation==0.0.10
