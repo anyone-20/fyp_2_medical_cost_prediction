@@ -873,7 +873,7 @@ with tab_prediction:
         def handle_input_change():
             pass
 
-        st.markdown('<div class="input-wrapper-box">', unsafe_allow_html=True)
+    
         st.markdown("#### Personal information")
         p_col1, p_col2 = st.columns(2)
 
@@ -991,7 +991,7 @@ with tab_prediction:
             type="primary",
             disabled=has_validation_error,
         )
-        st.markdown("</div>", unsafe_allow_html=True)
+       
 
     # PROCESS PREDICTION
     if execute_prediction:
