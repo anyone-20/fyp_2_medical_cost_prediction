@@ -1183,12 +1183,29 @@ with tab_locator:
     st.markdown("##### Detect Location & Start Searching")
     st.caption("Click the button below to retrieve facilities within your specified criteria.")
 
-    # 2. TRIGGER BUTTON LABEL UPDATED TO "Start Searching:"
-    st.markdown('<div class="search-btn-container">', unsafe_allow_html=True)
-    user_loc = streamlit_geolocation(
-        button_label="Start Searching:"
+    # 2. TRIGGER GEOLOCATION
+    st.markdown(
+        """
+        <style>
+        .search-btn-container div[data-testid="stCustomComponentV1"] iframe {
+            display: block;
+        }
+        /* Style and label wrapper */
+        .search-btn-label {
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: var(--app-primary);
+            margin-bottom: 0.35rem;
+        }
+        </style>
+        <div class="search-btn-label">📍 Start Searching:</div>
+        <div class="search-btn-container">
+        """,
+        unsafe_allow_html=True,
     )
-    st.markdown('</div>', unsafe_allow_html=True)
+    user_loc = streamlit_geolocation()
+    st.markdown("</div>", unsafe_allow_html=True)
+    
 
     if user_loc and user_loc.get("latitude") and user_loc.get("longitude"):
         u_lat, u_lon = float(user_loc["latitude"]), float(user_loc["longitude"])
