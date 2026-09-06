@@ -1158,7 +1158,6 @@ with tab_prediction:
             st.error("Prediction failed.")
             st.exception(error)
 
-
 # ============================================================
 # TAB 2: NEARBY HEALTHCARE FACILITIES
 # ============================================================
@@ -1185,127 +1184,44 @@ with tab_locator:
     st.markdown("##### Detect Location & Start Searching")
     st.caption("Click the button below to retrieve facilities within your specified criteria.")
 
-    # 2. BEAUTIFUL NATIVE LIGHT-BLUE GEOLOCATION BUTTON (NO GREY SQUARE ICON)
-    import streamlit.components.v1 as components
-
-    # Ensure session state for coordinates exists
-    if "user_lat" not in st.session_state:
-        st.session_state.user_lat = None
-    if "user_lon" not in st.session_state:
-        st.session_state.user_lon = None
-
-    # Read coordinates passed from our embedded HTML5 geolocation trigger
-    query_params = st.query_params
-    if "lat" in query_params and "lon" in query_params:
-        try:
-            st.session_state.user_lat = float(query_params["lat"])
-            st.session_state.user_lon = float(query_params["lon"])
-        except (ValueError, TypeError):
-            pass
-
-    # Custom HTML5 Geolocation Button with identical Light-Blue Theme
-    geo_html = """
-    <!DOCTYPE html>
-    <html>
-    <head>
+    # 2. BEAUTIFIED LIGHT-BLUE BUTTON (NATIVE STREAMLIT GEOLOCATION RE-STYLED)
+    st.markdown(
+        """
         <style>
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        /* Container for the locator trigger */
+        div[data-testid="stCustomComponentV1"]:has(iframe[title="streamlit_geolocation.streamlit_geolocation"]) {
+            display: inline-block !important;
+            margin: 0.5rem 0 1.2rem 0 !important;
         }
-        .btn-container {
-            padding: 6px 0 10px 0;
-            display: flex;
-            align-items: center;
+
+        /* Re-style the component iframe directly into the Light Blue button */
+        iframe[title="streamlit_geolocation.streamlit_geolocation"] {
+            border: 1px solid #90caf9 !important;
+            border-radius: 14px !important;
+            background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%) !important;
+            box-shadow: 0 4px 14px rgba(33, 150, 243, 0.18) !important;
+            width: 220px !important;
+            height: 50px !important;
+            transition: all 160ms ease !important;
         }
-        .custom-search-btn {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            min-height: 48px;
-            padding: 0 28px;
-            background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
-            color: #1565c0;
-            border: 1px solid #90caf9;
-            font-size: 16px;
-            font-weight: 750;
-            letter-spacing: 0.2px;
-            border-radius: 14px;
-            box-shadow: 0 4px 14px rgba(33, 150, 243, 0.18);
-            cursor: pointer;
-            transition: all 160ms ease;
-            outline: none;
-        }
-        .custom-search-btn:hover {
+
+        iframe[title="streamlit_geolocation.streamlit_geolocation"]:hover {
             transform: translateY(-2px);
-            background: linear-gradient(135deg, #e8f4fd 0%, #c5e1fd 100%);
-            border-color: #64b5f6;
-            box-shadow: 0 6px 18px rgba(33, 150, 243, 0.28);
-        }
-        .custom-search-btn:active {
-            transform: translateY(0);
-        }
-        .status-msg {
-            margin-left: 14px;
-            font-size: 13.5px;
-            color: #64748b;
-            font-weight: 600;
+            border-color: #64b5f6 !important;
+            box-shadow: 0 6px 18px rgba(33, 150, 243, 0.28) !important;
         }
         </style>
-    </head>
-    <body>
-        <div class="btn-container">
-            <button class="custom-search-btn" onclick="getLocation()">
-                <span>📍 Start Searching</span>
-            </button>
-            <span id="status" class="status-msg"></span>
-        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
-        <script>
-        function getLocation() {
-            const status = document.getElementById("status");
-            if (!navigator.geolocation) {
-                status.innerText = "Geolocation is not supported by your browser.";
-                return;
-            }
-            status.innerText = "Acquiring coordinates...";
-            navigator.geolocation.getCurrentPosition(
-                (position) => {
-                    const lat = position.coords.latitude;
-                    const lon = position.coords.longitude;
-                    status.innerText = "Coordinates found! Loading results...";
-                    
-                    // Set query parameters and trigger reload in the parent Streamlit frame
-                    const url = new URL(window.parent.location.href);
-                    url.searchParams.set("lat", lat);
-                    url.searchParams.set("lon", lon);
-                    window.parent.location.href = url.href;
-                },
-                (error) => {
-                    if (error.code === error.PERMISSION_DENIED) {
-                        status.innerText = "Location access was denied in your browser settings.";
-                    } else {
-                        status.innerText = "Location temporarily unavailable. Please retry.";
-                    }
-                },
-                { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-            );
-        }
-        </script>
-    </body>
-    </html>
-    """
-
-    components.html(geo_html, height=64)
+    user_loc = streamlit_geolocation()
 
     # 3. FACILITY SEARCH & MAP PRESENTATION
-    u_lat = st.session_state.user_lat
-    u_lon = st.session_state.user_lon
+    if user_loc and user_loc.get("latitude") is not None and user_loc.get("longitude") is not None:
+        u_lat = float(user_loc["latitude"])
+        u_lon = float(user_loc["longitude"])
 
-    if u_lat is not None and u_lon is not None:
         with st.spinner("Searching nearby facilities via OpenStreetMap..."):
             raw_facilities = search_nearby_facilities(u_lat, u_lon, radius_m=radius_choice * 1000)
 
@@ -1363,8 +1279,7 @@ with tab_locator:
                     else:
                         st.button("No Phone Listed", disabled=True, key=f"dis_fac_{i}", use_container_width=True)
     else:
-        st.info("Set your search preferences above, then click **Start Searching** to find nearby facilities.")
-        
+        st.info("Set your search preferences above, then click the locator button to search.")
         
 # ============================================================
 # TAB 3: SYSTEM SPECIFICATIONS
