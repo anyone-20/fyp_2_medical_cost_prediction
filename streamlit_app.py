@@ -1192,7 +1192,6 @@ with tab_locator:
         .search-btn-container div[data-testid="stCustomComponentV1"] iframe {
             display: block;
         }
-        /* Style and label wrapper */
         .search-btn-label {
             font-size: 0.95rem;
             font-weight: 700;
@@ -1207,10 +1206,10 @@ with tab_locator:
     )
     user_loc = streamlit_geolocation()
     st.markdown("</div>", unsafe_allow_html=True)
-    
 
     if user_loc and user_loc.get("latitude") and user_loc.get("longitude"):
-        u_lat, u_lon = float(user_loc["latitude"]), float(user_loc["longitude"])
+        u_lat = float(user_loc["latitude"])
+        u_lon = float(user_loc["longitude"])
 
         with st.spinner("Searching nearby facilities via OpenStreetMap..."):
             raw_facilities = search_nearby_facilities(u_lat, u_lon, radius_m=radius_choice * 1000)
@@ -1222,7 +1221,7 @@ with tab_locator:
         else:
             facilities = raw_facilities
 
-     if not facilities:
+        if not facilities:
             st.info(f"No {type_filter.lower()} found within {radius_choice} km. Try expanding the search radius.")
         else:
             st.markdown(f"##### Showing {len(facilities)} Medical Facilities Nearby")
@@ -1268,48 +1267,9 @@ with tab_locator:
                         st.link_button("🌐 Website", site, use_container_width=True)
                     else:
                         st.button("No Phone Listed", disabled=True, key=f"dis_fac_{i}", use_container_width=True)
-                        
-
-            for i, fac in enumerate(facilities, start=1):
-                badge_class = "badge-hospital" if fac["type"] == "Hospital" else "badge-clinic"
-                st.markdown(
-                    f"""
-                    <div class="facility-card">
-                        <div class="facility-header">
-                            <div>
-                                <h4 class="facility-name">{i}. {fac['name']}</h4>
-                                <span class="{badge_class}">{fac['type']}</span>
-                                <div class="facility-address">📍 {fac['address']}</div>
-                            </div>
-                            <div class="distance-tag">
-                                🚗 {fac['distance_km']:.2f} km
-                            </div>
-                        </div>
-                    </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
-
-                b1, b2, b3 = st.columns(3)
-                with b1:
-                    dir_url = f"https://www.google.com/maps/dir/?api=1&destination={fac['lat']},{fac['lon']}"
-                    st.link_button("🗺️ Get Directions", dir_url, use_container_width=True)
-                with b2:
-                    search_url = f"https://www.google.com/maps/search/?api=1&query={quote(fac['name'] + ' ' + str(fac['lat']) + ',' + str(fac['lon']))}"
-                    st.link_button("🔍 Google Maps", search_url, use_container_width=True)
-                with b3:
-                    if fac["phone"]:
-                        clean_phone = re.sub(r"[^0-9+]", "", fac["phone"])
-                        st.link_button("📞 Call Clinic", f"tel:{clean_phone}", use_container_width=True)
-                    elif fac["website"]:
-                        site = fac["website"] if fac["website"].startswith("http") else f"https://{fac['website']}"
-                        st.link_button("🌐 Website", site, use_container_width=True)
-                    else:
-                        st.button("No Phone Listed", disabled=True, key=f"dis_fac_{i}", use_container_width=True)
     else:
         st.info("Set your search preferences above, then click **Start Searching:** to find nearby facilities.")
-
-
+        
 # ============================================================
 # TAB 3: SYSTEM SPECIFICATIONS
 # ============================================================
