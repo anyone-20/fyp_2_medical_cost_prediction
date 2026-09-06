@@ -22,7 +22,6 @@ from urllib.parse import quote
 from streamlit_geolocation import streamlit_geolocation
 
 
-
 # ============================================================
 # 1. PAGE CONFIGURATION
 # ============================================================
@@ -149,27 +148,27 @@ st.markdown(
         box-shadow: var(--app-shadow);
     }
 
-   /* ===============================
-   Input fields
-   =============================== */
+    /* ===============================
+    Input fields
+    =============================== */
 
-div[data-baseweb="input"] > div,
-div[data-baseweb="base-input"],
-div[data-baseweb="select"] > div {
-    background: white !important;
-    border: 1px solid #d7e8fb !important;
-    border-radius: 10px !important;
-}
+    div[data-baseweb="input"] > div,
+    div[data-baseweb="base-input"],
+    div[data-baseweb="select"] > div {
+        background: white !important;
+        border: 1px solid #d7e8fb !important;
+        border-radius: 10px !important;
+    }
 
-div[data-baseweb="input"] input,
-div[data-baseweb="base-input"] input {
-    background: transparent !important;
-    color: #173b5e !important;
-}
+    div[data-baseweb="input"] input,
+    div[data-baseweb="base-input"] input {
+        background: transparent !important;
+        color: #173b5e !important;
+    }
 
-div[data-baseweb="select"] span {
-    color: #173b5e !important;
-}
+    div[data-baseweb="select"] span {
+        color: #173b5e !important;
+    }
 
     input, textarea {
         color: var(--app-text) !important;
@@ -428,24 +427,21 @@ ORIGINAL_TARGET_NAME = "qc701"
 
 
 # ============================================================
-# 3. OPTIONAL STREAMLIT SECRETS
+# 3. OPTIONAL STREAMLIT SECRETS & ENV VARS
 # ============================================================
 
 def get_secret(key: str) -> str | None:
-    """Safely read a Streamlit secret."""
-
+    """Safely read a Streamlit secret or environment variable."""
     try:
-        return str(st.secrets[key])
-
+        if key in st.secrets:
+            return str(st.secrets[key])
     except Exception:
-        return None
+        pass
+    return os.getenv(key)
 
 
-import os
-import streamlit as st
-
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-EXCHANGE_RATE_API_KEY = os.getenv("EXCHANGE_RATE_API_KEY")
+GEMINI_API_KEY = get_secret("GEMINI_API_KEY")
+EXCHANGE_RATE_API_KEY = get_secret("EXCHANGE_RATE_API_KEY")
 
 if GEMINI_API_KEY:
     st.caption("🟢 AI assistant ready")
@@ -523,10 +519,7 @@ EMPLOYMENT_MAPPING = {
 
 
 def get_readable_feature_name(feature_name: str) -> str:
-    """
-    Convert saved model feature names into user-friendly labels.
-    """
-
+    """Convert saved model feature names into user-friendly labels."""
     feature_name = str(feature_name).strip()
 
     if feature_name in FEATURE_LABELS:
@@ -585,21 +578,7 @@ CURRENCY_OPTIONS = {
 
 @st.cache_resource
 def load_model_artifact(model_path: str) -> dict[str, Any]:
-    """
-    Load and validate the latest complete model artifact.
-
-    Latest PKL format:
-        lightgbm_model
-        xgboost_model
-        lightgbm_weight
-        xgboost_weight
-        original_feature_names
-        interaction_source_features
-        final_feature_names
-
-    Older aliases are accepted where possible.
-    """
-
+    """Load and validate the latest complete model artifact."""
     path = Path(model_path)
 
     if not path.exists():
@@ -618,10 +597,6 @@ def load_model_artifact(model_path: str) -> dict[str, Any]:
             f"Loaded type: {type(raw).__name__}"
         )
 
-    # --------------------------------------------------------
-    # Resolve model objects and blending weights
-    # --------------------------------------------------------
-
     lgb_model = raw.get("lightgbm_model")
     if lgb_model is None:
         lgb_model = raw.get("lgb_model")
@@ -638,13 +613,7 @@ def load_model_artifact(model_path: str) -> dict[str, Any]:
     if xgb_weight is None and lgb_weight is not None:
         xgb_weight = 1.0 - float(lgb_weight)
 
-    # --------------------------------------------------------
-    # Resolve original and final feature definitions
-    # --------------------------------------------------------
-
     original_feature_names = raw.get("original_feature_names")
-
-    # Compatibility with artifacts that stored only final names.
     if original_feature_names is None:
         original_feature_names = raw.get("feature_names")
 
@@ -656,25 +625,17 @@ def load_model_artifact(model_path: str) -> dict[str, Any]:
         "interaction_source_features",
         [],
     )
-
-    # The latest artifact stores a specification dictionary rather
-    # than a fitted sklearn transformer. It is not called directly.
     preprocessor_spec = raw.get("preprocessor")
 
     missing = []
-
     if lgb_model is None:
         missing.append("lightgbm_model / lgb_model")
-
     if xgb_model is None:
         missing.append("xgboost_model / xgb_model")
-
     if lgb_weight is None:
         missing.append("lightgbm_weight / blend_weight")
-
     if original_feature_names is None:
         missing.append("original_feature_names")
-
     if final_feature_names is None:
         missing.append("final_feature_names / feature_names")
 
@@ -705,27 +666,15 @@ def load_model_artifact(model_path: str) -> dict[str, Any]:
     xgb_weight = float(xgb_weight)
 
     if not 0.0 <= lgb_weight <= 1.0:
-        raise ValueError(
-            f"Invalid LightGBM blend weight: {lgb_weight}"
-        )
+        raise ValueError(f"Invalid LightGBM blend weight: {lgb_weight}")
 
     if not 0.0 <= xgb_weight <= 1.0:
-        raise ValueError(
-            f"Invalid XGBoost blend weight: {xgb_weight}"
-        )
+        raise ValueError(f"Invalid XGBoost blend weight: {xgb_weight}")
 
-    if not np.isclose(
-        lgb_weight + xgb_weight,
-        1.0,
-        atol=1e-6,
-    ):
-        raise ValueError(
-            "The LightGBM and XGBoost weights do not add up to 1."
-        )
+    if not np.isclose(lgb_weight + xgb_weight, 1.0, atol=1e-6):
+        raise ValueError("The LightGBM and XGBoost weights do not add up to 1.")
 
-    # Validate the model input sizes against the stored final matrix.
     expected_count = len(final_feature_names)
-
     lgb_count = getattr(lgb_model, "n_features_in_", None)
     xgb_count = getattr(xgb_model, "n_features_in_", None)
 
@@ -752,23 +701,14 @@ def load_model_artifact(model_path: str) -> dict[str, Any]:
         "original_feature_names": original_feature_names,
         "interaction_source_features": interaction_source_features,
         "final_feature_names": final_feature_names,
-        # Compatibility alias used by some UI sections.
         "feature_names": final_feature_names,
         "preprocessor_spec": preprocessor_spec,
         "target_name": raw.get("target_name", TARGET_NAME),
-        "target_transformation": raw.get(
-            "target_transformation",
-            "log1p",
-        ),
-        "model_name": raw.get(
-            "model_type",
-            MODEL_VERSION,
-        ),
-        "artifact_version": raw.get(
-            "artifact_version",
-            "unknown",
-        ),
+        "target_transformation": raw.get("target_transformation", "log1p"),
+        "model_name": raw.get("model_type", MODEL_VERSION),
+        "artifact_version": raw.get("artifact_version", "unknown"),
     }
+
 
 # ============================================================
 # 8. FEATURE-ENGINEERING HELPERS
@@ -776,14 +716,9 @@ def load_model_artifact(model_path: str) -> dict[str, Any]:
 
 def safe_log1p(value: float) -> float:
     """Apply log1p to a non-negative monetary value."""
-
     value = float(value)
-
     if value < 0:
-        raise ValueError(
-            "Cost values cannot be negative."
-        )
-
+        raise ValueError("Cost values cannot be negative.")
     return float(np.log1p(value))
 
 
@@ -801,27 +736,14 @@ def create_feature_candidates(
     health_code: int,
     employed_code: int,
 ) -> dict[str, float]:
-    """
-    Create all currently supported ORIGINAL predictor values.
-
-    Interaction variables are not manually requested from the user.
-    They are generated later from the PKL's stored interaction rules.
-    """
-
+    """Create all currently supported ORIGINAL predictor values."""
     if height_cm <= 0:
-        raise ValueError(
-            "Height must be greater than zero."
-        )
+        raise ValueError("Height must be greater than zero.")
 
     if weight_kg <= 0:
-        raise ValueError(
-            "Weight must be greater than zero."
-        )
+        raise ValueError("Weight must be greater than zero.")
 
-    bmi = float(
-        weight_kg
-        / ((height_cm / 100.0) ** 2)
-    )
+    bmi = float(weight_kg / ((height_cm / 100.0) ** 2))
 
     values = {
         "age": float(age),
@@ -829,30 +751,14 @@ def create_feature_candidates(
         "bmi": bmi,
         "qp401": float(chronic_code),
         "qq201": float(smoking_code),
-        "log_past_qc701": safe_log1p(
-            previous_inpatient_cost
-        ),
+        "log_past_qc701": safe_log1p(previous_inpatient_cost),
         "qc401": float(hospitalized_code),
-        "log_qc7b": safe_log1p(
-            outpatient_cost
-        ),
+        "log_qc7b": safe_log1p(outpatient_cost),
         "qp201": float(health_code),
         "qgb1": float(employed_code),
-
-        # Compatibility candidates for older model versions.
-        # CFPS weight qp102 is measured in jin, where 1 kg = 2 jin.
         "qp102": float(weight_kg * 2.0),
     }
 
-    # One-hot encoded self-rated-health features.
-    # HEALTH_MAPPING uses:
-    # 1 = Excellent (reference category)
-    # 2 = Very good
-    # 3 = Good
-    # 4 = Fair
-    # 5 = Poor
-    #
-    # Excellent is represented by all four dummy columns being 0.
     values["health_very_good"] = float(int(health_code == 2))
     values["health_good"] = float(int(health_code == 3))
     values["health_fair"] = float(int(health_code == 4))
@@ -876,11 +782,7 @@ def create_original_model_input(
     health_code: int,
     employed_code: int,
 ) -> pd.DataFrame:
-    """
-    Create one row containing the exact ORIGINAL predictors stored
-    in the latest PKL artifact.
-    """
-
+    """Create one row containing the exact ORIGINAL predictors stored in the PKL."""
     candidates = create_feature_candidates(
         age=age,
         gender_code=gender_code,
@@ -903,12 +805,9 @@ def create_original_model_input(
 
     if missing:
         raise ValueError(
-            "The application cannot create all original predictors "
-            "required by the latest PKL.\n\n"
+            "The application cannot create all original predictors required by the latest PKL.\n\n"
             "Unsupported original predictors:\n"
             + "\n".join(f"- {feature}" for feature in missing)
-            + "\n\nAdd matching user inputs and coding rules to "
-            "create_feature_candidates()."
         )
 
     model_input = pd.DataFrame(
@@ -926,21 +825,14 @@ def create_original_model_input(
     ].apply(pd.to_numeric, errors="coerce")
 
     if model_input.isna().any().any():
-        invalid = model_input.columns[
-            model_input.isna().any()
-        ].tolist()
-
+        invalid = model_input.columns[model_input.isna().any()].tolist()
         raise ValueError(
             "The generated original input contains invalid values:\n"
             + "\n".join(f"- {feature}" for feature in invalid)
         )
 
-    if np.isinf(
-        model_input.to_numpy(dtype=float)
-    ).any():
-        raise ValueError(
-            "The generated original input contains infinite values."
-        )
+    if np.isinf(model_input.to_numpy(dtype=float)).any():
+        raise ValueError("The generated original input contains infinite values.")
 
     return model_input
 
@@ -951,11 +843,7 @@ def create_engineered_model_input(
     interaction_source_features: list[str],
     final_feature_names: list[str],
 ) -> pd.DataFrame:
-    """
-    Recreate pairwise interaction features exactly as specified by
-    the latest saved artifact, then enforce the final feature order.
-    """
-
+    """Recreate pairwise interaction features and enforce the final feature order."""
     engineered = original_input.copy()
 
     missing_sources = [
@@ -966,26 +854,15 @@ def create_engineered_model_input(
 
     if missing_sources:
         raise KeyError(
-            "Interaction source variables are missing from the "
-            "original input:\n"
+            "Interaction source variables are missing from the original input:\n"
             + "\n".join(f"- {feature}" for feature in missing_sources)
         )
 
-    for left_index in range(
-        len(interaction_source_features)
-    ):
-        for right_index in range(
-            left_index + 1,
-            len(interaction_source_features)
-        ):
+    for left_index in range(len(interaction_source_features)):
+        for right_index in range(left_index + 1, len(interaction_source_features)):
             left = interaction_source_features[left_index]
             right = interaction_source_features[right_index]
-            interaction_name = f"{left} {right}"
-
-            engineered[interaction_name] = (
-                engineered[left]
-                * engineered[right]
-            )
+            engineered[f"{left} {right}"] = engineered[left] * engineered[right]
 
     missing_final = [
         feature
@@ -995,41 +872,29 @@ def create_engineered_model_input(
 
     if missing_final:
         raise KeyError(
-            "The application could not recreate all final model "
-            "features required by the PKL:\n"
+            "The application could not recreate all final model features required by the PKL:\n"
             + "\n".join(f"- {feature}" for feature in missing_final)
         )
 
-    engineered = engineered.loc[
-        :,
-        final_feature_names,
-    ].apply(pd.to_numeric, errors="coerce")
+    engineered = engineered.loc[:, final_feature_names].apply(
+        pd.to_numeric, errors="coerce"
+    )
 
     if engineered.isna().any().any():
-        invalid = engineered.columns[
-            engineered.isna().any()
-        ].tolist()
-
+        invalid = engineered.columns[engineered.isna().any()].tolist()
         raise ValueError(
             "The engineered model input contains invalid values:\n"
             + "\n".join(f"- {feature}" for feature in invalid)
         )
 
-    if np.isinf(
-        engineered.to_numpy(dtype=float)
-    ).any():
-        raise ValueError(
-            "The engineered model input contains infinite values."
-        )
+    if np.isinf(engineered.to_numpy(dtype=float)).any():
+        raise ValueError("The engineered model input contains infinite values.")
 
     return engineered
 
+
 # ============================================================
 # 8A. NEARBY HEALTHCARE FACILITY LOCATOR
-# ============================================================
-# The location is requested ONLY when the user clicks the
-# streamlit-geolocation button. No location is requested on page load.
-# OpenStreetMap Overpass is used to retrieve nearby hospitals/clinics.
 # ============================================================
 
 OVERPASS_API_URLS = [
@@ -1048,7 +913,6 @@ def haversine_distance_km(
     longitude_2: float,
 ) -> float:
     """Calculate straight-line distance between two GPS coordinates."""
-
     earth_radius_km = 6371.0088
 
     lat1 = np.radians(float(latitude_1))
@@ -1061,14 +925,10 @@ def haversine_distance_km(
 
     a = (
         np.sin(delta_lat / 2.0) ** 2
-        + np.cos(lat1)
-        * np.cos(lat2)
-        * np.sin(delta_lon / 2.0) ** 2
+        + np.cos(lat1) * np.cos(lat2) * np.sin(delta_lon / 2.0) ** 2
     )
 
-    return float(
-        2.0 * earth_radius_km * np.arcsin(np.sqrt(a))
-    )
+    return float(2.0 * earth_radius_km * np.arcsin(np.sqrt(a)))
 
 
 @st.cache_data(ttl=600, show_spinner=False)
@@ -1077,14 +937,7 @@ def search_nearby_healthcare_facilities(
     longitude: float,
     radius_m: int = HEALTHCARE_SEARCH_RADIUS_M,
 ) -> list[dict[str, Any]]:
-    """
-    Retrieve nearby hospitals and clinics from OpenStreetMap.
-
-    The Overpass `around` filter is used with the user's GPS coordinates.
-    Results are sorted by straight-line distance and limited to the
-    nearest HEALTHCARE_MAX_RESULTS facilities.
-    """
-
+    """Retrieve nearby hospitals and clinics from OpenStreetMap."""
     query = f"""
     [out:json][timeout:25];
 
@@ -1101,45 +954,34 @@ def search_nearby_healthcare_facilities(
     out center tags;
     """
 
-   last_error = None
+    last_error = None
+    payload = None
 
-for api_url in OVERPASS_API_URLS:
-    try:
-        response = requests.post(
-            api_url,
-            data=query,
-            headers={
-                "User-Agent": "MedicalCostPredictionResearchApp/1.0"
-            },
-            timeout=35,
+    for api_url in OVERPASS_API_URLS:
+        try:
+            response = requests.post(
+                api_url,
+                data=query,
+                headers={"User-Agent": "MedicalCostPredictionResearchApp/1.0"},
+                timeout=35,
+            )
+            response.raise_for_status()
+            payload = response.json()
+            break
+        except requests.RequestException as e:
+            last_error = e
+            continue
+    else:
+        raise RuntimeError(
+            "All healthcare map services are temporarily unavailable. "
+            f"Last error: {last_error}"
         )
 
-        response.raise_for_status()
-
-        payload = response.json()
-        break
-
-    except requests.RequestException as e:
-        last_error = e
-        continue
-
-else:
-    raise RuntimeError(
-        "All healthcare map services are temporarily unavailable. "
-        f"Last error: {last_error}"
-    )
-    
-    response.raise_for_status()
-
-    payload = response.json()
     elements = payload.get("elements", [])
     facilities: list[dict[str, Any]] = []
 
     for element in elements:
         tags = element.get("tags") or {}
-
-        # Nodes store lat/lon directly; ways/relations normally expose
-        # their representative location through the returned center.
         element_lat = element.get("lat")
         element_lon = element.get("lon")
 
@@ -1184,18 +1026,8 @@ else:
             address_parts.append(postcode)
 
         address = ", ".join(address_parts) or "Address not available"
-
-        phone = str(
-            tags.get("phone")
-            or tags.get("contact:phone")
-            or ""
-        ).strip()
-
-        website = str(
-            tags.get("website")
-            or tags.get("contact:website")
-            or ""
-        ).strip()
+        phone = str(tags.get("phone") or tags.get("contact:phone") or "").strip()
+        website = str(tags.get("website") or tags.get("contact:website") or "").strip()
 
         distance_km = haversine_distance_km(
             latitude,
@@ -1220,7 +1052,6 @@ else:
             }
         )
 
-    # Remove duplicate OSM records while preserving the closest record.
     unique_facilities: dict[str, dict[str, Any]] = {}
     for facility in facilities:
         key = (
@@ -1244,14 +1075,8 @@ def build_google_maps_search_url(
     longitude: float,
 ) -> str:
     """Build a Google Maps search URL for a facility."""
-
-    query = quote(
-        f"{name} {latitude},{longitude}"
-    )
-    return (
-        "https://www.google.com/maps/search/?api=1&query="
-        f"{query}"
-    )
+    query = quote(f"{name} {latitude},{longitude}")
+    return f"https://www.google.com/maps/search/?api=1&query={query}"
 
 
 def build_google_maps_directions_url(
@@ -1259,11 +1084,7 @@ def build_google_maps_directions_url(
     longitude: float,
 ) -> str:
     """Build a Google Maps directions URL to a facility."""
-
-    return (
-        "https://www.google.com/maps/dir/?api=1&destination="
-        f"{latitude},{longitude}"
-    )
+    return f"https://www.google.com/maps/dir/?api=1&destination={latitude},{longitude}"
 
 
 # ============================================================
@@ -1275,93 +1096,49 @@ def predict_medical_cost(
     artifact: dict[str, Any],
     original_input: pd.DataFrame,
 ) -> dict[str, Any]:
-    """
-    Recreate the stored interaction features and generate the
-    blended LightGBM + XGBoost prediction.
-
-    No fit(), fit_transform(), or training operation is performed.
-    """
-
+    """Generate the blended LightGBM + XGBoost prediction."""
     engineered_input = create_engineered_model_input(
         original_input=original_input,
-        interaction_source_features=artifact[
-            "interaction_source_features"
-        ],
-        final_feature_names=artifact[
-            "final_feature_names"
-        ],
+        interaction_source_features=artifact["interaction_source_features"],
+        final_feature_names=artifact["final_feature_names"],
     )
 
     lgb_model = artifact["lgb_model"]
     xgb_model = artifact["xgb_model"]
 
-    expected_lgb_features = getattr(
-        lgb_model,
-        "n_features_in_",
-        None,
-    )
-    expected_xgb_features = getattr(
-        xgb_model,
-        "n_features_in_",
-        None,
-    )
+    expected_lgb_features = getattr(lgb_model, "n_features_in_", None)
+    expected_xgb_features = getattr(xgb_model, "n_features_in_", None)
+    produced_count = int(engineered_input.shape[1])
 
-    produced_count = int(
-        engineered_input.shape[1]
-    )
-
-    if (
-        expected_lgb_features is not None
-        and produced_count != int(expected_lgb_features)
-    ):
+    if expected_lgb_features is not None and produced_count != int(expected_lgb_features):
         raise ValueError(
-            "Engineered input does not match the LightGBM "
-            "model input size.\n"
+            "Engineered input does not match the LightGBM model input size.\n"
             f"Produced: {produced_count}\n"
             f"Expected: {expected_lgb_features}"
         )
 
-    if (
-        expected_xgb_features is not None
-        and produced_count != int(expected_xgb_features)
-    ):
+    if expected_xgb_features is not None and produced_count != int(expected_xgb_features):
         raise ValueError(
-            "Engineered input does not match the XGBoost "
-            "model input size.\n"
+            "Engineered input does not match the XGBoost model input size.\n"
             f"Produced: {produced_count}\n"
             f"Expected: {expected_xgb_features}"
         )
 
     lgb_log_prediction = float(
-        np.asarray(
-            lgb_model.predict(
-                engineered_input
-            )
-        ).reshape(-1)[0]
+        np.asarray(lgb_model.predict(engineered_input)).reshape(-1)[0]
     )
 
     xgb_log_prediction = float(
-        np.asarray(
-            xgb_model.predict(
-                engineered_input
-            )
-        ).reshape(-1)[0]
+        np.asarray(xgb_model.predict(engineered_input)).reshape(-1)[0]
     )
 
     blended_log_prediction = float(
-        artifact["lgb_weight"]
-        * lgb_log_prediction
-        + artifact["xgb_weight"]
-        * xgb_log_prediction
+        artifact["lgb_weight"] * lgb_log_prediction
+        + artifact["xgb_weight"] * xgb_log_prediction
     )
 
     predicted_original_cost = float(
-        max(
-            0.0,
-            np.expm1(
-                blended_log_prediction
-            ),
-        )
+        max(0.0, np.expm1(blended_log_prediction))
     )
 
     return {
@@ -1371,88 +1148,52 @@ def predict_medical_cost(
         "xgb_log_prediction": xgb_log_prediction,
         "original_input": original_input,
         "engineered_input": engineered_input,
-        # Compatibility alias used by the SHAP section.
         "transformed_input": engineered_input,
     }
+
 
 # ============================================================
 # 10. SHAP HELPERS
 # ============================================================
 
 @st.cache_resource
-def create_shap_explainers(
-    _lgb_model: Any,
-    _xgb_model: Any,
-):
-    """
-    Lazily import SHAP and create cached tree explainers.
-    """
-
+def create_shap_explainers(_lgb_model: Any, _xgb_model: Any):
+    """Lazily import SHAP and create cached tree explainers."""
     import shap
-
     return (
-        shap.TreeExplainer(
-            _lgb_model
-        ),
-        shap.TreeExplainer(
-            _xgb_model
-        ),
+        shap.TreeExplainer(_lgb_model),
+        shap.TreeExplainer(_xgb_model),
     )
 
 
-def extract_shap_vector(
-    explainer: Any,
-    transformed_input: Any,
-) -> np.ndarray:
+def extract_shap_vector(explainer: Any, transformed_input: Any) -> np.ndarray:
     """Convert SHAP output into one vector."""
-
-    result = explainer(
-        transformed_input
-    )
-
-    values = getattr(
-        result,
-        "values",
-        result,
-    )
-
+    result = explainer(transformed_input)
+    values = getattr(result, "values", result)
     values = np.asarray(values)
 
     if values.ndim == 1:
         return values
-
     if values.ndim == 2:
         return values[0]
-
     if values.ndim == 3:
         return values[0, :, 0]
 
-    raise ValueError(
-        "Unexpected SHAP output shape: "
-        f"{values.shape}"
-    )
+    raise ValueError(f"Unexpected SHAP output shape: {values.shape}")
 
 
 def get_transformed_feature_names(
     artifact: dict[str, Any],
     transformed_count: int,
 ) -> list[str]:
-    """
-    Return the final engineered feature names stored in the PKL.
-    """
-
-    names = list(
-        artifact["final_feature_names"]
-    )
-
+    """Return the final engineered feature names stored in the PKL."""
+    names = list(artifact["final_feature_names"])
     if len(names) != transformed_count:
         raise ValueError(
-            "Stored final feature names do not match the SHAP "
-            "vector length.\n"
+            "Stored final feature names do not match the SHAP vector length.\n"
             f"Names: {len(names)}\n"
             f"SHAP values: {transformed_count}"
         )
-
     return names
 
 
@@ -1462,14 +1203,7 @@ def calculate_top_contributors(
     prediction_result: dict[str, Any],
     top_n: int = 5,
 ) -> pd.DataFrame:
-    """
-    Calculate SHAP contributions only for models that actually
-    contribute to the blended prediction.
-
-    This prevents a zero-weight model with a different training
-    feature count from causing SHAP shape errors.
-    """
-
+    """Calculate SHAP contributions for models that contribute to the blend."""
     model_input = prediction_result["transformed_input"]
 
     if isinstance(model_input, pd.DataFrame):
@@ -1477,28 +1211,14 @@ def calculate_top_contributors(
     else:
         shap_input = np.asarray(model_input)
 
-    produced_feature_count = int(
-        shap_input.shape[1]
-    )
-
+    produced_feature_count = int(shap_input.shape[1])
     lgb_model = artifact["lgb_model"]
     xgb_model = artifact["xgb_model"]
-
-    lgb_weight = float(
-        artifact["lgb_weight"]
-    )
-    xgb_weight = float(
-        artifact["xgb_weight"]
-    )
+    lgb_weight = float(artifact["lgb_weight"])
+    xgb_weight = float(artifact["xgb_weight"])
 
     final_feature_names = list(
-        artifact.get(
-            "final_feature_names",
-            artifact.get(
-                "feature_names",
-                [],
-            ),
-        )
+        artifact.get("final_feature_names", artifact.get("feature_names", []))
     )
 
     weighted_shap_vectors = []
@@ -1506,145 +1226,68 @@ def calculate_top_contributors(
 
     import shap
 
-    # --------------------------------------------------------
-    # Explain LightGBM only when it contributes to the blend
-    # --------------------------------------------------------
-
     if lgb_weight > 1e-12:
-
-        expected_lgb_features = getattr(
-            lgb_model,
-            "n_features_in_",
-            None,
-        )
-
+        expected_lgb_features = getattr(lgb_model, "n_features_in_", None)
         if (
             expected_lgb_features is not None
-            and produced_feature_count
-            != int(expected_lgb_features)
+            and produced_feature_count != int(expected_lgb_features)
         ):
             raise ValueError(
-                "LightGBM contributes to the prediction, but its "
-                "SHAP input feature count does not match training.\n"
-                f"Current input: {produced_feature_count}\n"
-                f"LightGBM expects: {expected_lgb_features}"
+                "LightGBM input feature count mismatch in SHAP calculation.\n"
+                f"Current: {produced_feature_count}\n"
+                f"Expected: {expected_lgb_features}"
             )
 
-        lgb_explainer = shap.TreeExplainer(
-            lgb_model
-        )
-
-        lgb_result = lgb_explainer(
-            shap_input
-        )
-
-        lgb_values = np.asarray(
-            getattr(
-                lgb_result,
-                "values",
-                lgb_result,
-            )
-        )
+        lgb_explainer = shap.TreeExplainer(lgb_model)
+        lgb_result = lgb_explainer(shap_input)
+        lgb_values = np.asarray(getattr(lgb_result, "values", lgb_result))
 
         if lgb_values.ndim == 2:
             lgb_values = lgb_values[0]
-
         elif lgb_values.ndim == 3:
             lgb_values = lgb_values[0, :, 0]
-
         elif lgb_values.ndim != 1:
-            raise ValueError(
-                "Unexpected LightGBM SHAP output shape: "
-                f"{lgb_values.shape}"
-            )
+            raise ValueError(f"Unexpected LightGBM SHAP shape: {lgb_values.shape}")
 
-        weighted_shap_vectors.append(
-            lgb_weight * lgb_values
-        )
-
-        explained_models.append(
-            "LightGBM"
-        )
-
-    # --------------------------------------------------------
-    # Explain XGBoost only when it contributes to the blend
-    # --------------------------------------------------------
+        weighted_shap_vectors.append(lgb_weight * lgb_values)
+        explained_models.append("LightGBM")
 
     if xgb_weight > 1e-12:
-
-        expected_xgb_features = getattr(
-            xgb_model,
-            "n_features_in_",
-            None,
-        )
-
+        expected_xgb_features = getattr(xgb_model, "n_features_in_", None)
         if (
             expected_xgb_features is not None
-            and produced_feature_count
-            != int(expected_xgb_features)
+            and produced_feature_count != int(expected_xgb_features)
         ):
             raise ValueError(
-                "XGBoost contributes to the prediction, but its "
-                "SHAP input feature count does not match training.\n"
-                f"Current input: {produced_feature_count}\n"
-                f"XGBoost expects: {expected_xgb_features}"
+                "XGBoost input feature count mismatch in SHAP calculation.\n"
+                f"Current: {produced_feature_count}\n"
+                f"Expected: {expected_xgb_features}"
             )
 
-        xgb_explainer = shap.TreeExplainer(
-            xgb_model
-        )
-
-        xgb_result = xgb_explainer(
-            shap_input
-        )
-
-        xgb_values = np.asarray(
-            getattr(
-                xgb_result,
-                "values",
-                xgb_result,
-            )
-        )
+        xgb_explainer = shap.TreeExplainer(xgb_model)
+        xgb_result = xgb_explainer(shap_input)
+        xgb_values = np.asarray(getattr(xgb_result, "values", xgb_result))
 
         if xgb_values.ndim == 2:
             xgb_values = xgb_values[0]
-
         elif xgb_values.ndim == 3:
             xgb_values = xgb_values[0, :, 0]
-
         elif xgb_values.ndim != 1:
-            raise ValueError(
-                "Unexpected XGBoost SHAP output shape: "
-                f"{xgb_values.shape}"
-            )
+            raise ValueError(f"Unexpected XGBoost SHAP shape: {xgb_values.shape}")
 
-        weighted_shap_vectors.append(
-            xgb_weight * xgb_values
-        )
-
-        explained_models.append(
-            "XGBoost"
-        )
+        weighted_shap_vectors.append(xgb_weight * xgb_values)
+        explained_models.append("XGBoost")
 
     if not weighted_shap_vectors:
-        raise ValueError(
-            "Neither model has a positive blending weight."
-        )
+        raise ValueError("Neither model has a positive blending weight.")
 
-    blended_values = np.sum(
-        weighted_shap_vectors,
-        axis=0,
-    )
+    blended_values = np.sum(weighted_shap_vectors, axis=0)
 
-    if len(final_feature_names) != len(
-        blended_values
-    ):
+    if len(final_feature_names) != len(blended_values):
         raise ValueError(
-            "Stored feature-name count does not match the SHAP "
-            "output length.\n"
-            f"Stored names: {len(final_feature_names)}\n"
-            f"SHAP values: {len(blended_values)}\n"
-            f"Explained models: {explained_models}"
+            "Stored feature-name count does not match the SHAP output length.\n"
+            f"Stored: {len(final_feature_names)}\n"
+            f"Values: {len(blended_values)}"
         )
 
     contribution_df = pd.DataFrame(
@@ -1658,33 +1301,18 @@ def calculate_top_contributors(
         }
     )
 
-    contribution_df[
-        "Absolute contribution"
-    ] = contribution_df[
-        "SHAP contribution"
-    ].abs()
-
-    contribution_df[
-        "Effect"
-    ] = np.where(
-        contribution_df[
-            "SHAP contribution"
-        ] >= 0,
+    contribution_df["Absolute contribution"] = contribution_df["SHAP contribution"].abs()
+    contribution_df["Effect"] = np.where(
+        contribution_df["SHAP contribution"] >= 0,
         "Increased prediction",
         "Decreased prediction",
     )
 
-    contribution_df = (
-        contribution_df
-        .sort_values(
-            "Absolute contribution",
-            ascending=False,
-        )
+    return (
+        contribution_df.sort_values("Absolute contribution", ascending=False)
         .head(top_n)
         .reset_index(drop=True)
     )
-
-    return contribution_df
 
 
 # ============================================================
@@ -1692,8 +1320,7 @@ def calculate_top_contributors(
 # ============================================================
 
 EXCHANGE_RATE_API_URL = (
-    "https://v6.exchangerate-api.com/v6/"
-    "{api_key}/latest/{base_currency}"
+    "https://v6.exchangerate-api.com/v6/{api_key}/latest/{base_currency}"
 )
 
 
@@ -1702,54 +1329,31 @@ def get_exchange_rates(
     api_key: str,
     base_currency: str = "CNY",
 ) -> dict[str, Any]:
-    """
-    Retrieve exchange rates and cache them for one hour.
-
-    The application intentionally requests rates with CNY as the
-    base currency so the SAME rate can be used for:
-      1. User-selected currency -> CNY model input
-      2. CNY model prediction -> user-selected currency output
-    """
-
+    """Retrieve exchange rates and cache them for one hour."""
     if not api_key:
-        raise ValueError(
-            "EXCHANGE_RATE_API_KEY is missing."
-        )
+        raise ValueError("EXCHANGE_RATE_API_KEY is missing.")
 
     url = EXCHANGE_RATE_API_URL.format(
         api_key=api_key,
         base_currency=base_currency,
     )
 
-    response = requests.get(
-        url,
-        timeout=10,
-    )
+    response = requests.get(url, timeout=10)
     response.raise_for_status()
-
     data = response.json()
 
     if data.get("result") != "success":
         raise RuntimeError(
-            "ExchangeRate-API error: "
-            f"{data.get('error-type', 'unknown-error')}"
+            f"ExchangeRate-API error: {data.get('error-type', 'unknown-error')}"
         )
 
-    rates = data.get(
-        "conversion_rates",
-        {},
-    )
-
+    rates = data.get("conversion_rates", {})
     if not rates:
-        raise RuntimeError(
-            "No exchange rates were returned."
-        )
+        raise RuntimeError("No exchange rates were returned.")
 
     return {
         "rates": rates,
-        "last_updated": data.get(
-            "time_last_update_utc"
-        ),
+        "last_updated": data.get("time_last_update_utc"),
     }
 
 
@@ -1758,21 +1362,8 @@ def get_currency_rate_from_cny(
     target_currency: str,
     api_key: str | None,
 ) -> dict[str, Any]:
-    """
-    Return the rate expressed as:
-
-        1 CNY = rate × target_currency
-
-    Example:
-        1 CNY = 0.65 MYR
-
-    This single rate is used in both directions so the user's input
-    conversion and the displayed prediction remain consistent.
-    """
-
-    target_currency = str(
-        target_currency
-    ).upper().strip()
+    """Return the rate expressed as: 1 CNY = rate * target_currency."""
+    target_currency = str(target_currency).upper().strip()
 
     if target_currency == "CNY":
         return {
@@ -1786,32 +1377,19 @@ def get_currency_rate_from_cny(
             "Configure it in the Streamlit environment or Secrets."
         )
 
-    rate_data = get_exchange_rates(
-        api_key=api_key,
-        base_currency="CNY",
-    )
-
+    rate_data = get_exchange_rates(api_key=api_key, base_currency="CNY")
     rates = rate_data["rates"]
 
     if target_currency not in rates:
-        raise ValueError(
-            f"Unsupported currency: {target_currency}"
-        )
+        raise ValueError(f"Unsupported currency: {target_currency}")
 
-    rate = float(
-        rates[target_currency]
-    )
-
+    rate = float(rates[target_currency])
     if rate <= 0:
-        raise ValueError(
-            f"Invalid exchange rate returned for {target_currency}."
-        )
+        raise ValueError(f"Invalid exchange rate returned for {target_currency}.")
 
     return {
         "rate": rate,
-        "last_updated": rate_data[
-            "last_updated"
-        ],
+        "last_updated": rate_data["last_updated"],
     }
 
 
@@ -1821,35 +1399,20 @@ def convert_selected_currency_to_cny(
     source_currency: str,
     rate_from_cny: float,
 ) -> float:
-    """
-    Convert a user-entered amount into CNY.
-
-    If:
-        1 CNY = rate_from_cny × source_currency
-
-    then:
-        CNY = source_currency_amount / rate_from_cny
-    """
-
+    """Convert a user-entered amount into CNY."""
     amount = float(amount)
     rate_from_cny = float(rate_from_cny)
 
     if amount < 0:
-        raise ValueError(
-            "Currency amounts cannot be negative."
-        )
+        raise ValueError("Currency amounts cannot be negative.")
 
     if source_currency == "CNY":
         return amount
 
     if rate_from_cny <= 0:
-        raise ValueError(
-            "The exchange rate must be greater than zero."
-        )
+        raise ValueError("The exchange rate must be greater than zero.")
 
-    return float(
-        amount / rate_from_cny
-    )
+    return float(amount / rate_from_cny)
 
 
 def convert_cny_to_selected_currency(
@@ -1858,32 +1421,22 @@ def convert_cny_to_selected_currency(
     target_currency: str,
     rate_from_cny: float,
 ) -> float:
-    """
-    Convert a CNY amount into the user's selected currency.
-    """
-
+    """Convert a CNY amount into the user's selected currency."""
     amount_cny = float(amount_cny)
     rate_from_cny = float(rate_from_cny)
 
     if amount_cny < 0:
-        raise ValueError(
-            "Currency amounts cannot be negative."
-        )
+        raise ValueError("Currency amounts cannot be negative.")
 
     if target_currency == "CNY":
         return amount_cny
 
     if rate_from_cny <= 0:
-        raise ValueError(
-            "The exchange rate must be greater than zero."
-        )
+        raise ValueError("The exchange rate must be greater than zero.")
 
-    return float(
-        amount_cny * rate_from_cny
-    )
+    return float(amount_cny * rate_from_cny)
 
 
-# Backward-compatible helper used by any older section of the app.
 def convert_cny_amount(
     *,
     amount_cny: float,
@@ -1891,26 +1444,21 @@ def convert_cny_amount(
     api_key: str | None,
 ) -> dict[str, Any]:
     """Convert a CNY amount to a selected display currency."""
-
     rate_info = get_currency_rate_from_cny(
         target_currency=target_currency,
         api_key=api_key,
     )
 
-    converted_amount = (
-        convert_cny_to_selected_currency(
-            amount_cny=amount_cny,
-            target_currency=target_currency,
-            rate_from_cny=rate_info["rate"],
-        )
+    converted_amount = convert_cny_to_selected_currency(
+        amount_cny=amount_cny,
+        target_currency=target_currency,
+        rate_from_cny=rate_info["rate"],
     )
 
     return {
         "rate": rate_info["rate"],
         "converted_amount": converted_amount,
-        "last_updated": rate_info[
-            "last_updated"
-        ],
+        "last_updated": rate_info["last_updated"],
     }
 
 
@@ -1919,17 +1467,10 @@ def convert_cny_amount(
 # ============================================================
 
 @st.cache_resource
-def load_gemini_client(
-    api_key: str,
-):
+def load_gemini_client(api_key: str):
     """Create a Gemini client only when a key is available."""
-
     from google import genai
-
-    return genai.Client(
-        api_key=api_key
-    )
-
+    return genai.Client(api_key=api_key)
 
 
 def detect_chat_intent(
@@ -1937,27 +1478,12 @@ def detect_chat_intent(
     user_message: str,
     prediction_context: dict[str, Any],
 ) -> dict[str, Any]:
-    """
-    Ask Gemini to classify the user's message.
-
-    Gemini is ONLY used to understand the request and extract
-    hypothetical feature changes. Gemini never calculates the
-    medical-cost prediction itself.
-    """
-
+    """Ask Gemini to classify the user's message."""
     if not GEMINI_API_KEY:
-        raise RuntimeError(
-            "GEMINI_API_KEY is not configured."
-        )
+        raise RuntimeError("GEMINI_API_KEY is not configured.")
 
-    client = load_gemini_client(
-        GEMINI_API_KEY
-    )
-
-    current_inputs = prediction_context.get(
-        "raw_inputs",
-        {},
-    )
+    client = load_gemini_client(GEMINI_API_KEY)
+    current_inputs = prediction_context.get("raw_inputs", {})
 
     prompt = f"""
 You are an intent parser inside a machine-learning medical-cost
@@ -2056,16 +1582,6 @@ rather than CNY, return it using these special temporary keys:
 outpatient_cost_selected_currency
 previous_inpatient_cost_selected_currency
 
-Examples of valid output:
-
-{{"intent":"explanation","changes":{{}}}}
-
-{{"intent":"what_if","changes":{{"weight_kg":45}}}}
-
-{{"intent":"what_if","changes":{{"employed_label":"Employed"}}}}
-
-{{"intent":"what_if","changes":{{"weight_kg":55,"smoking_label":"No"}}}}
-
 User message:
 {user_message}
 """
@@ -2075,2533 +1591,10 @@ User message:
         contents=prompt,
     )
 
-    response_text = getattr(
-        response,
-        "text",
-        None,
-    )
-
+    response_text = getattr(response, "text", None)
     if not response_text:
-        raise RuntimeError(
-            "Gemini returned an empty intent response."
-        )
+        raise RuntimeError("Gemini returned an empty intent response.")
 
     cleaned = response_text.strip()
-
-    cleaned = re.sub(
-        r"^```(?:json)?\s*",
-        "",
-        cleaned,
-        flags=re.IGNORECASE,
-    )
-
-    cleaned = re.sub(
-        r"\s*```$",
-        "",
-        cleaned,
-    )
-
-    result = json.loads(
-        cleaned
-    )
-
-    if not isinstance(
-        result,
-        dict,
-    ):
-        raise ValueError(
-            "Gemini intent output must be a JSON object."
-        )
-
-    intent = str(
-        result.get(
-            "intent",
-            "explanation",
-        )
-    ).strip()
-
-    if intent not in {
-        "explanation",
-        "what_if",
-    }:
-        intent = "explanation"
-
-    changes = result.get(
-        "changes",
-        {},
-    )
-
-    if not isinstance(
-        changes,
-        dict,
-    ):
-        changes = {}
-
-    return {
-        "intent": intent,
-        "changes": changes,
-    }
-
-
-def convert_what_if_currency_changes(
-    *,
-    changes: dict[str, Any],
-    prediction_context: dict[str, Any],
-) -> dict[str, Any]:
-    """
-    Convert hypothetical monetary values entered in the user's
-    preferred currency into CNY before they are validated and sent
-    to the model.
-    """
-
-    changes = dict(
-        changes
-    )
-
-    currency_code = prediction_context.get(
-        "selected_currency_code",
-        "CNY",
-    )
-
-    exchange_rate = float(
-        prediction_context.get(
-            "exchange_rate",
-            1.0,
-        )
-        or 1.0
-    )
-
-    selected_outpatient = changes.pop(
-        "outpatient_cost_selected_currency",
-        None,
-    )
-
-    if selected_outpatient is not None:
-        changes[
-            "outpatient_cost_cny"
-        ] = convert_selected_currency_to_cny(
-            amount=float(
-                selected_outpatient
-            ),
-            source_currency=currency_code,
-            rate_from_cny=exchange_rate,
-        )
-
-    selected_previous = changes.pop(
-        "previous_inpatient_cost_selected_currency",
-        None,
-    )
-
-    if selected_previous is not None:
-        changes[
-            "previous_inpatient_cost_cny"
-        ] = convert_selected_currency_to_cny(
-            amount=float(
-                selected_previous
-            ),
-            source_currency=currency_code,
-            rate_from_cny=exchange_rate,
-        )
-
-    return changes
-
-
-def validate_what_if_changes(
-    changes: dict[str, Any],
-) -> dict[str, Any]:
-    """
-    Validate Gemini-extracted hypothetical feature changes.
-
-    Only supported model inputs are accepted.
-    """
-
-    allowed_features = {
-        "age",
-        "gender_label",
-        "height_cm",
-        "weight_kg",
-        "chronic_illness_label",
-        "smoking_label",
-        "hospitalized_label",
-        "health_label",
-        "employed_label",
-        "outpatient_cost_cny",
-        "previous_inpatient_cost_cny",
-    }
-
-    cleaned = {}
-
-    for feature, value in changes.items():
-
-        if feature not in allowed_features:
-            continue
-
-        if feature == "age":
-            value = int(
-                value
-            )
-
-            if not 1 <= value <= 119:
-                raise ValueError(
-                    "Age must be between 1 and 119."
-                )
-
-        elif feature == "height_cm":
-            value = float(
-                value
-            )
-
-            if not 50 <= value <= 250:
-                raise ValueError(
-                    "Height must be between 50 and 250 cm."
-                )
-
-        elif feature == "weight_kg":
-            value = float(
-                value
-            )
-
-            if not 10 <= value <= 300:
-                raise ValueError(
-                    "Weight must be between 10 and 300 kg."
-                )
-
-        elif feature in {
-            "outpatient_cost_cny",
-            "previous_inpatient_cost_cny",
-        }:
-            value = float(
-                value
-            )
-
-            if value < 0:
-                raise ValueError(
-                    "Medical-cost values cannot be negative."
-                )
-
-        elif feature == "gender_label":
-            value = str(
-                value
-            )
-
-            if value not in GENDER_MAPPING:
-                raise ValueError(
-                    "Unsupported gender value."
-                )
-
-        elif feature in {
-            "chronic_illness_label",
-            "smoking_label",
-            "hospitalized_label",
-        }:
-            value = str(
-                value
-            )
-
-            if value not in YES_NO_MAPPING:
-                raise ValueError(
-                    f"Unsupported value for {feature}."
-                )
-
-        elif feature == "health_label":
-            value = str(
-                value
-            )
-
-            if value not in HEALTH_MAPPING:
-                raise ValueError(
-                    "Unsupported self-rated health value."
-                )
-
-        elif feature == "employed_label":
-            value = str(
-                value
-            )
-
-            if value not in EMPLOYMENT_MAPPING:
-                raise ValueError(
-                    "Unsupported employment value."
-                )
-
-        cleaned[
-            feature
-        ] = value
-
-    if not cleaned:
-        raise ValueError(
-            "No supported hypothetical feature change was detected."
-        )
-
-    return cleaned
-
-
-def run_what_if_prediction(
-    *,
-    artifact: dict[str, Any],
-    prediction_context: dict[str, Any],
-    changes: dict[str, Any],
-) -> dict[str, Any]:
-    """
-    Rerun the REAL trained model using hypothetical user changes.
-
-    The previous prediction remains unchanged in session state.
-    """
-
-    original_inputs = prediction_context.get(
-        "raw_inputs"
-    )
-
-    if not original_inputs:
-        raise ValueError(
-            "Raw input values from the original prediction are unavailable. "
-            "Please generate a new prediction first."
-        )
-
-    original_inputs = dict(
-        original_inputs
-    )
-
-    modified_inputs = dict(
-        original_inputs
-    )
-
-    modified_inputs.update(
-        changes
-    )
-
-    # Validate all final values and recalculate BMI.
-    new_bmi = validate_raw_inputs(
-        age=int(
-            modified_inputs["age"]
-        ),
-        height_cm=float(
-            modified_inputs["height_cm"]
-        ),
-        weight_kg=float(
-            modified_inputs["weight_kg"]
-        ),
-        outpatient_cost=float(
-            modified_inputs[
-                "outpatient_cost_cny"
-            ]
-        ),
-        previous_inpatient_cost=float(
-            modified_inputs[
-                "previous_inpatient_cost_cny"
-            ]
-        ),
-    )
-
-    new_model_input = create_original_model_input(
-        required_original_features=artifact[
-            "original_feature_names"
-        ],
-        age=int(
-            modified_inputs["age"]
-        ),
-        gender_code=GENDER_MAPPING[
-            modified_inputs[
-                "gender_label"
-            ]
-        ],
-        height_cm=float(
-            modified_inputs[
-                "height_cm"
-            ]
-        ),
-        weight_kg=float(
-            modified_inputs[
-                "weight_kg"
-            ]
-        ),
-        chronic_code=YES_NO_MAPPING[
-            modified_inputs[
-                "chronic_illness_label"
-            ]
-        ],
-        smoking_code=YES_NO_MAPPING[
-            modified_inputs[
-                "smoking_label"
-            ]
-        ],
-        previous_inpatient_cost=float(
-            modified_inputs[
-                "previous_inpatient_cost_cny"
-            ]
-        ),
-        hospitalized_code=YES_NO_MAPPING[
-            modified_inputs[
-                "hospitalized_label"
-            ]
-        ],
-        outpatient_cost=float(
-            modified_inputs[
-                "outpatient_cost_cny"
-            ]
-        ),
-        health_code=HEALTH_MAPPING[
-            modified_inputs[
-                "health_label"
-            ]
-        ],
-        employed_code=EMPLOYMENT_MAPPING[
-            modified_inputs[
-                "employed_label"
-            ]
-        ],
-    )
-
-    result = predict_medical_cost(
-        artifact=artifact,
-        original_input=new_model_input,
-    )
-
-    new_cost_cny = float(
-        result[
-            "predicted_original_cost"
-        ]
-    )
-
-    currency_code = prediction_context.get(
-        "selected_currency_code",
-        "CNY",
-    )
-
-    exchange_rate = float(
-        prediction_context.get(
-            "exchange_rate",
-            1.0,
-        )
-        or 1.0
-    )
-
-    new_cost_selected = (
-        convert_cny_to_selected_currency(
-            amount_cny=new_cost_cny,
-            target_currency=currency_code,
-            rate_from_cny=exchange_rate,
-        )
-    )
-
-    # Generate SHAP values for the hypothetical result as well.
-    hypothetical_top_factors = []
-
-    try:
-        top_contributors = calculate_top_contributors(
-            artifact=artifact,
-            prediction_result=result,
-            top_n=5,
-        )
-
-        hypothetical_top_factors = [
-            {
-                "feature": str(
-                    row["Feature"]
-                ),
-                "effect": str(
-                    row["Effect"]
-                ),
-                "contribution": float(
-                    row[
-                        "SHAP contribution"
-                    ]
-                ),
-            }
-            for _, row in top_contributors.iterrows()
-        ]
-
-    except Exception:
-        hypothetical_top_factors = []
-
-    return {
-        "changes": dict(
-            changes
-        ),
-        "original_inputs": original_inputs,
-        "modified_inputs": modified_inputs,
-        "bmi": new_bmi,
-        "prediction_result": result,
-        "predicted_log_cost": float(
-            result[
-                "predicted_log_cost"
-            ]
-        ),
-        "predicted_cost_cny": new_cost_cny,
-        "predicted_cost_selected": new_cost_selected,
-        "top_factors": hypothetical_top_factors,
-    }
-
-
-def explain_what_if_prediction(
-    *,
-    original_context: dict[str, Any],
-    what_if_result: dict[str, Any],
-    user_message: str,
-) -> str:
-    """
-    Ask Gemini to explain a prediction that was already calculated
-    by the actual LightGBM + XGBoost pipeline.
-    """
-
-    if not GEMINI_API_KEY:
-        raise RuntimeError(
-            "GEMINI_API_KEY is not configured."
-        )
-
-    client = load_gemini_client(
-        GEMINI_API_KEY
-    )
-
-    old_cost_cny = float(
-        original_context[
-            "predicted_cost_cny"
-        ]
-    )
-
-    new_cost_cny = float(
-        what_if_result[
-            "predicted_cost_cny"
-        ]
-    )
-
-    difference_cny = (
-        new_cost_cny
-        - old_cost_cny
-    )
-
-    percentage_change = (
-        (
-            difference_cny
-            / old_cost_cny
-        )
-        * 100.0
-        if old_cost_cny > 0
-        else 0.0
-    )
-
-    currency_code = original_context.get(
-        "selected_currency_code",
-        "CNY",
-    )
-
-    currency_symbol = original_context.get(
-        "selected_currency_symbol",
-        "¥",
-    )
-
-    old_cost_selected = float(
-        original_context.get(
-            "predicted_cost_selected_currency",
-            old_cost_cny,
-        )
-    )
-
-    new_cost_selected = float(
-        what_if_result[
-            "predicted_cost_selected"
-        ]
-    )
-
-    top_factors = what_if_result.get(
-        "top_factors",
-        [],
-    )
-
-    if top_factors:
-        factor_text = "\n".join(
-            (
-                f"- {item['feature']}: "
-                f"{item['effect']} "
-                f"(SHAP contribution "
-                f"{item['contribution']:.4f})"
-            )
-            for item in top_factors
-        )
-    else:
-        factor_text = (
-            "Hypothetical SHAP factors are unavailable."
-        )
-
-    prompt = f"""
-You are an educational assistant explaining a hypothetical
-machine-learning medical-cost prediction.
-
-IMPORTANT:
-- The numerical predictions below were generated by the actual
-  trained LightGBM + XGBoost model.
-- Do NOT calculate or invent a different prediction.
-- Do NOT claim that changing a feature CAUSES healthcare costs
-  to rise or fall.
-- SHAP describes model behaviour and associations, not causation.
-- Do NOT diagnose illness or recommend treatment.
-- For health-related features such as BMI, weight, smoking, or
-  chronic illness, do not tell the user to change their health
-  solely to reduce a predicted bill.
-- You may explain that the user can simulate alternative values
-  to see how the model responds.
-- Keep the answer concise and easy to understand.
-
-Original prediction:
-- {currency_symbol}{old_cost_selected:,.2f} {currency_code}
-- ¥{old_cost_cny:,.2f} CNY
-
-Hypothetical prediction:
-- {currency_symbol}{new_cost_selected:,.2f} {currency_code}
-- ¥{new_cost_cny:,.2f} CNY
-
-Difference:
-- {difference_cny:+,.2f} CNY
-- {percentage_change:+.2f}%
-
-Requested changes:
-{json.dumps(what_if_result["changes"], ensure_ascii=False)}
-
-Modified BMI:
-{what_if_result["bmi"]:.2f}
-
-Top hypothetical SHAP factors:
-{factor_text}
-
-User question:
-{user_message}
-
-Explain:
-1. what was changed,
-2. the original versus hypothetical prediction,
-3. whether the model output increased or decreased,
-4. that this is a hypothetical model scenario rather than a
-   guaranteed real-world cost outcome.
-"""
-
-    response = client.models.generate_content(
-        model="gemini-2.5-flash",
-        contents=prompt,
-    )
-
-    response_text = getattr(
-        response,
-        "text",
-        None,
-    )
-
-    if not response_text:
-        raise RuntimeError(
-            "Gemini returned an empty what-if explanation."
-        )
-
-    return response_text.strip()
-
-
-def generate_gemini_explanation(
-    *,
-    prediction_context: dict[str, Any],
-    user_message: str,
-) -> str:
-    """
-    Generate a concise educational explanation using the latest
-    prediction, SHAP factors, and currency-conversion result.
-    """
-
-    if not GEMINI_API_KEY:
-        raise RuntimeError(
-            "GEMINI_API_KEY is not configured."
-        )
-
-    client = load_gemini_client(
-        GEMINI_API_KEY
-    )
-
-    # ========================================================
-    # 1. Prepare SHAP/model-factor context
-    # ========================================================
-
-    top_factors = prediction_context.get(
-        "top_factors",
-        [],
-    )
-
-    if top_factors:
-        factor_text = "\n".join(
-            (
-                f"- {item['feature']}: "
-                f"{item['effect']} "
-                f"(SHAP contribution "
-                f"{item['contribution']:.4f})"
-            )
-            for item in top_factors
-        )
-    else:
-        factor_text = (
-            "Model-factor information is unavailable."
-        )
-
-    # ========================================================
-    # 2. Prepare currency-conversion context
-    # ========================================================
-
-    converted_cost = prediction_context.get(
-        "converted_cost"
-    )
-
-    currency_code = prediction_context.get(
-        "selected_currency_code",
-        "CNY",
-    )
-
-    currency_symbol = prediction_context.get(
-        "selected_currency_symbol",
-        "¥",
-    )
-
-    exchange_rate = prediction_context.get(
-        "exchange_rate"
-    )
-
-    exchange_rate_updated = prediction_context.get(
-        "exchange_rate_updated"
-    )
-
-    currency_conversion_error = prediction_context.get(
-        "currency_conversion_error"
-    )
-
-    outpatient_input_selected = prediction_context.get(
-        "outpatient_cost_selected_currency"
-    )
-    previous_input_selected = prediction_context.get(
-        "previous_inpatient_cost_selected_currency"
-    )
-    outpatient_input_cny = prediction_context.get(
-        "outpatient_cost_cny"
-    )
-    previous_input_cny = prediction_context.get(
-        "previous_inpatient_cost_cny"
-    )
-
-    input_currency_context = (
-        f"- Current outpatient input: "
-        f"{currency_symbol}{outpatient_input_selected:,.2f} "
-        f"{currency_code} -> "
-        f"¥{outpatient_input_cny:,.2f} CNY\n"
-        f"- Previous inpatient input: "
-        f"{currency_symbol}{previous_input_selected:,.2f} "
-        f"{currency_code} -> "
-        f"¥{previous_input_cny:,.2f} CNY"
-        if (
-            outpatient_input_selected is not None
-            and previous_input_selected is not None
-            and outpatient_input_cny is not None
-            and previous_input_cny is not None
-        )
-        else "- Input currency-conversion details are unavailable."
-    )
-
-    if (
-        converted_cost is not None
-        and currency_code != "CNY"
-        and exchange_rate is not None
-    ):
-        currency_context = (
-            f"{input_currency_context}\n"
-            f"- Predicted cost in selected currency: "
-            f"{currency_symbol}{converted_cost:,.2f} "
-            f"{currency_code}\n"
-            f"- Prediction in model base currency: "
-            f"¥{prediction_context['predicted_cost_cny']:,.2f} CNY\n"
-            f"- Exchange rate used: "
-            f"1 CNY = {exchange_rate:.6f} "
-            f"{currency_code}\n"
-            f"- Exchange-rate update time: "
-            f"{exchange_rate_updated or 'Unavailable'}"
-        )
-
-    elif currency_code == "CNY":
-        currency_context = (
-            f"{input_currency_context}\n"
-            "- No exchange-rate conversion was required because "
-            "the selected currency is CNY."
-        )
-
-    elif currency_conversion_error:
-        currency_context = (
-            "- Currency conversion was unavailable.\n"
-            f"- Conversion error: "
-            f"{currency_conversion_error}"
-        )
-
-    else:
-        currency_context = (
-            "- Currency conversion was not available for "
-            "this prediction."
-        )
-
-    # ========================================================
-    # 3. Build Gemini prompt
-    # ========================================================
-
-    prompt = f"""
-You are an educational assistant inside a machine-learning
-application that estimates inpatient medical costs.
-
-The prediction is generated by a blended LightGBM and XGBoost
-regression model trained using historical CFPS survey data.
-
-Important rules:
-1. Explain the result using simple and understandable language.
-2. State that the prediction is an estimate and not a guaranteed bill.
-3. Explain that SHAP describes model behaviour and association and
-   does not prove medical causation.
-4. Do not diagnose illness or recommend treatment.
-5. Do not invent patient details, medical facts, exchange rates,
-   converted amounts, SHAP values, or new predictions.
-6. Use only the values supplied in the context below.
-7. Explain that exchange rates can change over time.
-8. If the user asks how the predicted cost could become lower,
-   discuss the SHAP factors that currently increase the MODEL
-   prediction. Phrase them as model-sensitive or associated factors,
-   not guaranteed ways to reduce real healthcare spending.
-9. For BMI, weight, smoking, health, chronic illness, or similar
-   health-related variables, never tell the user to change their
-   health solely to lower a predicted bill. Instead say that a
-   hypothetical value can be simulated to see how the model responds.
-10. For observed spending variables such as outpatient cost, explain
-    that a lower hypothetical value can be simulated, but do not frame
-    necessary medical care as something the user should avoid.
-11. If the user asks for a new hypothetical numerical prediction,
-    do not invent one. That request must be handled by the application's
-    real machine-learning what-if pipeline.
-12. Keep the response concise and directly answer the user's question.
-
-Prediction context:
-- Predicted inpatient cost:
-  ¥{prediction_context['predicted_cost_cny']:,.2f} CNY
-- Log-scale prediction:
-  {prediction_context['predicted_log_cost']:.4f}
-
-Currency information:
-{currency_context}
-
-Patient/model inputs:
-- Age: {prediction_context['age']}
-- BMI: {prediction_context['bmi']:.2f}
-- Gender: {prediction_context['gender']}
-- Chronic illness:
-  {prediction_context['chronic_illness']}
-- Smoking status:
-  {prediction_context['smoking_status']}
-- Hospitalized during the relevant period:
-  {prediction_context['hospitalized']}
-- Self-rated health:
-  {prediction_context['health_status']}
-- Employment status:
-  {prediction_context['employment_status']}
-
-Top model factors:
-{factor_text}
-
-User question:
-{user_message}
-"""
-
-    # ========================================================
-    # 4. Call Gemini
-    # ========================================================
-
-    response = client.models.generate_content(
-        model="gemini-2.5-flash",
-        contents=prompt,
-    )
-
-    response_text = getattr(
-        response,
-        "text",
-        None,
-    )
-
-    if not response_text:
-        raise RuntimeError(
-            "Gemini returned an empty response."
-        )
-
-    return response_text.strip()
-
-
-# ============================================================
-# 13. INPUT VALIDATION
-# ============================================================
-
-def validate_raw_inputs(
-    *,
-    age: int,
-    height_cm: float,
-    weight_kg: float,
-    outpatient_cost: float,
-    previous_inpatient_cost: float,
-) -> float:
-    """Validate the raw form values and return calculated BMI."""
-
-    errors = []
-
-    if age < 1 or age > 119:
-        errors.append(
-            "Age must be between 1 and 119."
-        )
-
-    if height_cm <= 0:
-        errors.append(
-            "Height must be greater than zero."
-        )
-
-    if weight_kg <= 0:
-        errors.append(
-            "Weight must be greater than zero."
-        )
-
-    if outpatient_cost < 0:
-        errors.append(
-            "Outpatient medical cost cannot be negative."
-        )
-
-    if previous_inpatient_cost < 0:
-        errors.append(
-            "Previous inpatient cost cannot be negative."
-        )
-
-    bmi = float(
-        weight_kg
-        / ((height_cm / 100.0) ** 2)
-    )
-
-    if bmi < 10 or bmi > 80:
-        errors.append(
-            "The calculated BMI is outside the expected range "
-            "of 10 to 80. Verify the height and weight."
-        )
-
-    if errors:
-        raise ValueError(
-            " ".join(errors)
-        )
-
-    return bmi
-
-
-# ============================================================
-# 14. SESSION STATE
-# ============================================================
-
-if "latest_prediction_context" not in st.session_state:
-    st.session_state.latest_prediction_context = None
-
-if "chat_messages" not in st.session_state:
-    st.session_state.chat_messages = [
-        {
-            "role": "assistant",
-            "content": (
-                "Hello! Generate a prediction and I can explain "
-                "the estimated cost and its model factors."
-            ),
-        }
-    ]
-
-
-# ============================================================
-# 15. LOAD THE MODEL
-# ============================================================
-
-try:
-    artifact = load_model_artifact(
-        str(MODEL_PATH)
-    )
-
-except Exception as error:
-    st.error(
-        "Unable to load the trained model."
-    )
-
-    st.exception(error)
-    st.stop()
-
-
-# ============================================================
-# 15A. MODEL SHAPE DIAGNOSTICS
-# This must appear only after artifact has been loaded.
-# ============================================================
-
-final_feature_names_for_diagnostics = artifact.get(
-    "final_feature_names",
-    artifact.get(
-        "feature_names",
-        [],
-    ),
-)
-
-lgb_expected_features = getattr(
-    artifact["lgb_model"],
-    "n_features_in_",
-    "Unknown",
-)
-
-xgb_expected_features = getattr(
-    artifact["xgb_model"],
-    "n_features_in_",
-    "Unknown",
-)
-
-
-# ============================================================
-# 16. APPLICATION HEADER
-# ============================================================
-
-st.markdown(
-    """
-    <div class="app-hero">
-        <h1>🏥 Inpatient Medical Cost Predictor</h1>
-        <p>
-            Enter the individual's information to estimate inpatient
-            medical cost using the latest blended Gradient Boosting model.
-        </p>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
-
-
-overview_col1, overview_col2, overview_col3 = st.columns(
-    3
-)
-
-with overview_col1:
-    st.markdown(
-        """
-        <div class="info-card">
-            <div class="info-card-title">Model</div>
-            <div class="info-card-value">LightGBM + XGBoost</div>
-            <div class="info-card-text">
-                A weighted Gradient Boosting ensemble trained on
-                historical CFPS survey data.
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-with overview_col2:
-    st.markdown(
-        """
-        <div class="info-card">
-            <div class="info-card-title">Output</div>
-            <div class="info-card-value">Estimated inpatient cost</div>
-            <div class="info-card-text">
-                The model predicts log cost and converts it back to
-                the original CNY cost scale.
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-with overview_col3:
-    st.markdown(
-        """
-        <div class="info-card">
-            <div class="info-card-title">Important</div>
-            <div class="info-card-value">Research estimate only</div>
-            <div class="info-card-text">
-                The result is not a guaranteed medical bill, diagnosis,
-                or financial recommendation.
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-
-st.caption(
-    f"Model version: {MODEL_VERSION} · "
-    f"Saved model: {artifact['model_name']}"
-)
-
-
-# ============================================================
-# 17. MODEL INFORMATION SIDEBAR
-# ============================================================
-
-with st.sidebar:
-    st.header(
-        "About this application"
-    )
-
-    st.write(
-        "This research prototype estimates inpatient medical "
-        "cost using stored interaction-feature rules and a blended "
-        "LightGBM–XGBoost model."
-    )
-
-    st.divider()
-
-    st.subheader(
-        "Model details"
-    )
-
-    st.write(
-        "**Model:**",
-        artifact["model_name"],
-    )
-
-    st.write(
-        "**Original user inputs:**",
-        len(
-            artifact["original_feature_names"]
-        ),
-    )
-
-    st.write(
-        "**LightGBM weight:**",
-        f"{artifact['lgb_weight']:.4f}",
-    )
-
-    st.write(
-        "**XGBoost weight:**",
-        f"{artifact['xgb_weight']:.4f}",
-    )
-
-
-    st.divider()
-
-    st.subheader(
-        "Model shape diagnostics"
-    )
-
-    st.write(
-        "**Current engineered features:**",
-        len(final_feature_names_for_diagnostics),
-    )
-
-    st.write(
-        "**LightGBM expects:**",
-        lgb_expected_features,
-    )
-
-    st.write(
-        "**XGBoost expects:**",
-        xgb_expected_features,
-    )
-
-    with st.expander(
-        "Original user-input features"
-    ):
-        for number, feature in enumerate(
-            artifact["original_feature_names"],
-            start=1,
-        ):
-            st.write(
-                f"{number}. {feature}"
-            )
-
-    with st.expander(
-        "Final engineered model features"
-    ):
-        for number, feature in enumerate(
-            artifact["final_feature_names"],
-            start=1,
-        ):
-            st.write(
-                f"{number}. {feature}"
-            )
-
-    st.divider()
-
-    st.caption(
-        "The floating chat button at the bottom-right can explain "
-        "the latest prediction and its model factors."
-    )
-
-
-# ============================================================
-# 18. USER INPUT FORM
-# ============================================================
-
-st.subheader(
-    "User feature inputs"
-)
-
-st.write(
-    "Choose your preferred currency first. Then enter all required "
-    "personal, health, employment, and medical-cost information."
-)
-
-# ------------------------------------------------------------
-# 18A. CURRENCY MUST BE SELECTED BEFORE THE FORM IS DISPLAYED
-# ------------------------------------------------------------
-#
-# This selectbox is intentionally OUTSIDE st.form().
-# Streamlit widgets inside a form do not trigger an immediate rerun,
-# so putting the currency selector inside the form would prevent the
-# cost-field labels from updating as soon as the user changes currency.
-#
-# A placeholder is used so the user must make an explicit selection.
-# ------------------------------------------------------------
-
-selected_currency_label = st.selectbox(
-    "Preferred currency",
-    options=list(
-        CURRENCY_OPTIONS.keys()
-    ),
-    index=None,
-    placeholder="Select your preferred currency",
-    help=(
-        "Select the currency you want to use for both medical-cost "
-        "inputs and the main prediction display. The application "
-        "converts the monetary inputs to CNY before sending them "
-        "to the machine-learning model."
-    ),
-)
-
-if selected_currency_label is None:
-    st.info(
-        "Please select your preferred currency before entering "
-        "medical-cost values."
-    )
-    submitted = False
-
-else:
-    selected_currency = CURRENCY_OPTIONS[
-        selected_currency_label
-    ]
-
-    selected_currency_code = selected_currency[
-        "code"
-    ]
-    selected_currency_symbol = selected_currency[
-        "symbol"
-    ]
-
-    st.caption(
-        "Selected currency: "
-        f"{selected_currency_label}. "
-        "Medical-cost inputs will be converted to CNY before "
-        "feature engineering and model prediction."
-    )
-
-    with st.form(
-        "medical_cost_form"
-    ):
-        st.markdown(
-            "#### Personal information"
-        )
-
-        personal_col1, personal_col2 = st.columns(
-            2
-        )
-
-        with personal_col1:
-            age = st.number_input(
-                "Age",
-                value=40,
-                step=1,
-                help=(
-                    "Enter the individual's age in completed years."
-                ),
-            )
-
-            gender_label = st.selectbox(
-                "Gender",
-                options=list(
-                    GENDER_MAPPING.keys()
-                ),
-                help=(
-                    "Select the gender category used by the model."
-                ),
-            )
-
-        with personal_col2:
-            height_cm = st.number_input(
-                "Height (cm)",
-                value=165.0,
-                step=0.1,
-                help=(
-                    "Height is used together with weight to calculate BMI."
-                ),
-            )
-
-            weight_kg = st.number_input(
-                "Weight (kg)",
-                value=60.0,
-                step=0.1,
-                help=(
-                    "Weight is used together with height to calculate BMI."
-                ),
-            )
-
-        calculated_bmi = float(
-            weight_kg
-            / ((height_cm / 100.0) ** 2)
-        )
-
-        bmi_status = (
-            "Underweight"
-            if calculated_bmi < 18.5
-            else "Normal range"
-            if calculated_bmi < 25
-            else "Overweight"
-            if calculated_bmi < 30
-            else "High BMI"
-        )
-
-        st.info(
-            f"Calculated BMI: **{calculated_bmi:.2f}** "
-            f"({bmi_status})"
-        )
-
-        st.divider()
-
-        st.markdown(
-            "#### Health and lifestyle information"
-        )
-
-        health_col1, health_col2 = st.columns(
-            2
-        )
-
-        with health_col1:
-            chronic_illness_label = st.selectbox(
-                "Chronic illness diagnosis",
-                options=list(
-                    YES_NO_MAPPING.keys()
-                ),
-                help=(
-                    "Whether the individual has been diagnosed "
-                    "with a chronic illness."
-                ),
-            )
-
-            smoking_label = st.selectbox(
-                "Smoking status",
-                options=list(
-                    YES_NO_MAPPING.keys()
-                ),
-                help=(
-                    "Whether the individual currently smokes."
-                ),
-            )
-
-        with health_col2:
-            hospitalized_label = st.selectbox(
-                "Hospitalized during the survey period",
-                options=list(
-                    YES_NO_MAPPING.keys()
-                ),
-                help=(
-                    "Whether the individual was hospitalized "
-                    "during the relevant survey period."
-                ),
-            )
-
-            health_label = st.selectbox(
-                "Self-rated health",
-                options=list(
-                    HEALTH_MAPPING.keys()
-                ),
-                index=2,
-                help=(
-                    "Select the individual's own assessment "
-                    "of their current health."
-                ),
-            )
-
-        employed_label = st.selectbox(
-            "Employment status",
-            options=list(
-                EMPLOYMENT_MAPPING.keys()
-            ),
-            help=(
-                "Select whether the individual is currently employed."
-            ),
-        )
-
-        st.divider()
-
-        st.markdown(
-            "#### Medical-cost information"
-        )
-
-        st.caption(
-            "Enter both amounts in "
-            f"{selected_currency_label}. "
-            "They will be converted to CNY automatically before "
-            "the model applies log1p and interaction-feature rules."
-        )
-
-        cost_col1, cost_col2 = st.columns(
-            2
-        )
-
-        with cost_col1:
-            outpatient_cost_selected = st.number_input(
-                (
-                    "Current outpatient medical cost "
-                    f"({selected_currency_code})"
-                ),
-                value=0.0,
-                step=100.0,
-                help=(
-                    "Enter current outpatient medical spending in "
-                    f"{selected_currency_label}."
-                ),
-            )
-
-        with cost_col2:
-            previous_inpatient_cost_selected = st.number_input(
-                (
-                    "Previous inpatient medical cost "
-                    f"({selected_currency_code})"
-                ),
-                value=0.0,
-                step=100.0,
-                help=(
-                    "Enter previous inpatient medical spending in "
-                    f"{selected_currency_label}."
-                ),
-            )
-
-        # --------------------------------------------------------
-        # PRE-SUBMISSION VALIDATION
-        # --------------------------------------------------------
-        # Validate the values immediately after the user enters them.
-        # If any value is invalid, the Predict button remains disabled
-        # until the user corrects the input.
-        form_validation_error = None
-
-        try:
-            validate_raw_inputs(
-                age=int(age),
-                height_cm=float(height_cm),
-                weight_kg=float(weight_kg),
-                outpatient_cost=float(outpatient_cost_selected),
-                previous_inpatient_cost=float(
-                    previous_inpatient_cost_selected
-                ),
-            )
-        except (ValueError, TypeError) as error:
-            form_validation_error = str(error)
-
-        if form_validation_error:
-            st.error(
-                "❌ Please correct the invalid input before continuing."
-            )
-            st.warning(form_validation_error)
-        else:
-            st.success(
-                "✅ All input values are valid. You can continue with the prediction."
-            )
-
-        st.warning(
-            "Review all entered values before submitting. "
-            "The prediction is an estimate derived from historical data."
-        )
-
-        submitted = st.form_submit_button(
-            "✨ Predict inpatient medical cost",
-            use_container_width=True,
-            type="primary",
-            disabled=form_validation_error is not None,
-        )
-
-
-# ============================================================
-# 19. PROCESS THE PREDICTION
-# ============================================================
-
-if submitted:
-    try:
-        # ----------------------------------------------------
-        # 19A. GET ONE EXCHANGE RATE FOR THE WHOLE PREDICTION
-        # ----------------------------------------------------
-        #
-        # The same rate is used for:
-        #   selected currency -> CNY inputs
-        #   CNY prediction -> selected currency output
-        #
-        # This avoids using two slightly different rates within
-        # one prediction.
-        # ----------------------------------------------------
-
-        rate_info = get_currency_rate_from_cny(
-            target_currency=selected_currency_code,
-            api_key=EXCHANGE_RATE_API_KEY,
-        )
-
-        exchange_rate = float(
-            rate_info["rate"]
-        )
-        exchange_rate_updated = rate_info[
-            "last_updated"
-        ]
-
-        # ----------------------------------------------------
-        # 19B. CONVERT BOTH USER COST INPUTS TO CNY FIRST
-        # ----------------------------------------------------
-
-        outpatient_cost_cny = (
-            convert_selected_currency_to_cny(
-                amount=float(
-                    outpatient_cost_selected
-                ),
-                source_currency=(
-                    selected_currency_code
-                ),
-                rate_from_cny=exchange_rate,
-            )
-        )
-
-        previous_inpatient_cost_cny = (
-            convert_selected_currency_to_cny(
-                amount=float(
-                    previous_inpatient_cost_selected
-                ),
-                source_currency=(
-                    selected_currency_code
-                ),
-                rate_from_cny=exchange_rate,
-            )
-        )
-
-        # ----------------------------------------------------
-        # 19C. VALIDATE THE VALUES THAT WILL ACTUALLY ENTER
-        #      THE MODEL (CNY)
-        # ----------------------------------------------------
-
-        validated_bmi = validate_raw_inputs(
-            age=int(age),
-            height_cm=float(height_cm),
-            weight_kg=float(weight_kg),
-            outpatient_cost=float(
-                outpatient_cost_cny
-            ),
-            previous_inpatient_cost=float(
-                previous_inpatient_cost_cny
-            ),
-        )
-
-        # ----------------------------------------------------
-        # 19D. BUILD MODEL INPUT USING CNY VALUES
-        # ----------------------------------------------------
-        #
-        # create_feature_candidates() later applies np.log1p().
-        # Therefore the correct sequence is:
-        #
-        # selected currency
-        # -> CNY
-        # -> log1p(CNY)
-        # -> interaction features
-        # -> LightGBM/XGBoost
-        #
-        # ----------------------------------------------------
-
-        model_input = create_original_model_input(
-            required_original_features=artifact[
-                "original_feature_names"
-            ],
-            age=int(age),
-            gender_code=GENDER_MAPPING[
-                gender_label
-            ],
-            height_cm=float(height_cm),
-            weight_kg=float(weight_kg),
-            chronic_code=YES_NO_MAPPING[
-                chronic_illness_label
-            ],
-            smoking_code=YES_NO_MAPPING[
-                smoking_label
-            ],
-            previous_inpatient_cost=float(
-                previous_inpatient_cost_cny
-            ),
-            hospitalized_code=YES_NO_MAPPING[
-                hospitalized_label
-            ],
-            outpatient_cost=float(
-                outpatient_cost_cny
-            ),
-            health_code=HEALTH_MAPPING[
-                health_label
-            ],
-            employed_code=EMPLOYMENT_MAPPING[
-                employed_label
-            ],
-        )
-
-        prediction_result = predict_medical_cost(
-            artifact=artifact,
-            original_input=model_input,
-        )
-
-        predicted_log_cost = float(
-            prediction_result[
-                "predicted_log_cost"
-            ]
-        )
-
-        predicted_cost_cny = float(
-            prediction_result[
-                "predicted_original_cost"
-            ]
-        )
-
-        # ----------------------------------------------------
-        # 19E. CONVERT CNY PREDICTION BACK TO USER CURRENCY
-        # ----------------------------------------------------
-
-        predicted_cost_selected = (
-            convert_cny_to_selected_currency(
-                amount_cny=predicted_cost_cny,
-                target_currency=(
-                    selected_currency_code
-                ),
-                rate_from_cny=exchange_rate,
-            )
-        )
-
-        st.success(
-            "Prediction completed successfully."
-        )
-
-       
-        # ----------------------------------------------------
-        # 19F. SHOW PREDICTION IN BOTH CURRENCIES
-        # ----------------------------------------------------
-
-        st.markdown(
-            "#### Predicted inpatient medical cost"
-        )
-
-        if selected_currency_code == "CNY":
-            st.metric(
-                "Prediction (CNY)",
-                f"¥{predicted_cost_cny:,.2f} CNY",
-            )
-
-        else:
-            result_col1, result_col2 = st.columns(
-                2
-            )
-
-            with result_col1:
-                st.metric(
-                    (
-                        "Prediction in your selected "
-                        f"currency ({selected_currency_code})"
-                    ),
-                    (
-                        f"{selected_currency_symbol}"
-                        f"{predicted_cost_selected:,.2f} "
-                        f"{selected_currency_code}"
-                    ),
-                )
-
-            with result_col2:
-                st.metric(
-                    "Prediction in model base currency (CNY)",
-                    f"¥{predicted_cost_cny:,.2f} CNY",
-                )
-
-            st.caption(
-                "The machine-learning model predicts on the CNY scale. "
-                "The selected-currency value is a conversion of the "
-                "same prediction."
-            )
-
-        # A compatibility dictionary keeps the older Gemini logic and
-        # any downstream code that expects currency_result working.
-        currency_result = {
-            "rate": exchange_rate,
-            "converted_amount": predicted_cost_selected,
-            "last_updated": exchange_rate_updated,
-        }
-        currency_error = None
-
-        # ----------------------------------------------------
-        # SHAP explanations
-        # ----------------------------------------------------
-
-        st.divider()
-
-        st.subheader(
-            "Top model factors"
-        )
-
-        top_factor_context = []
-
-        try:
-            top_contributors = (
-                calculate_top_contributors(
-                    artifact=artifact,
-                    prediction_result=(
-                        prediction_result
-                    ),
-                    top_n=5,
-                )
-            )
-
-            st.bar_chart(
-                top_contributors.set_index(
-                    "Feature"
-                )[
-                    [
-                        "Absolute contribution"
-                    ]
-                ],
-                use_container_width=True,
-            )
-
-            for index, row in (
-                top_contributors.iterrows()
-            ):
-                contribution = float(
-                    row[
-                        "SHAP contribution"
-                    ]
-                )
-
-                direction = (
-                    "increased"
-                    if contribution >= 0
-                    else "reduced"
-                )
-
-                st.write(
-                    f"{index + 1}. "
-                    f"**{row['Feature']}** "
-                    f"{direction} the model prediction."
-                )
-
-                top_factor_context.append(
-                    {
-                        "feature": str(
-                            row["Feature"]
-                        ),
-                        "effect": str(
-                            row["Effect"]
-                        ),
-                        "contribution": contribution,
-                    }
-                )
-
-            with st.expander(
-                "View detailed model-factor values"
-            ):
-                st.dataframe(
-                    top_contributors,
-                    use_container_width=True,
-                    hide_index=True,
-                )
-
-                st.caption(
-                    "SHAP values describe model behaviour on "
-                    "the log-cost scale. They do not prove "
-                    "medical causation."
-                )
-
-        except Exception as shap_error:
-            st.warning(
-                "The prediction worked, but SHAP explanations "
-                "could not be generated: "
-                f"{shap_error}"
-            )
-
-        # ----------------------------------------------------
-        # Save prediction-aware session context
-        # ----------------------------------------------------
-
-        st.session_state.latest_prediction_context = {
-            "predicted_cost_cny": predicted_cost_cny,
-            "predicted_log_cost": predicted_log_cost,
-
-            "selected_currency_label": selected_currency_label,
-            "selected_currency_code": selected_currency_code,
-            "selected_currency_symbol": selected_currency_symbol,
-
-            "converted_cost": predicted_cost_selected,
-            "predicted_cost_selected_currency": (
-                predicted_cost_selected
-            ),
-
-            "outpatient_cost_selected_currency": float(
-                outpatient_cost_selected
-            ),
-            "previous_inpatient_cost_selected_currency": float(
-                previous_inpatient_cost_selected
-            ),
-            "outpatient_cost_cny": outpatient_cost_cny,
-            "previous_inpatient_cost_cny": (
-                previous_inpatient_cost_cny
-            ),
-
-            "exchange_rate": exchange_rate,
-            "exchange_rate_updated": exchange_rate_updated,
-            "currency_conversion_error": None,
-
-            # Raw values required for Gemini what-if simulation.
-            # Monetary predictors are stored in CNY because this is
-            # the model's training/base currency.
-            "raw_inputs": {
-                "age": int(age),
-                "gender_label": gender_label,
-                "height_cm": float(height_cm),
-                "weight_kg": float(weight_kg),
-                "chronic_illness_label": chronic_illness_label,
-                "smoking_label": smoking_label,
-                "hospitalized_label": hospitalized_label,
-                "health_label": health_label,
-                "employed_label": employed_label,
-                "outpatient_cost_cny": float(
-                    outpatient_cost_cny
-                ),
-                "previous_inpatient_cost_cny": float(
-                    previous_inpatient_cost_cny
-                ),
-            },
-
-            "age": int(age),
-            "bmi": validated_bmi,
-            "gender": gender_label,
-            "chronic_illness": chronic_illness_label,
-            "smoking_status": smoking_label,
-            "hospitalized": hospitalized_label,
-            "health_status": health_label,
-            "employment_status": employed_label,
-            "top_factors": top_factor_context,
-        }
-
-        # ----------------------------------------------------
-        # Prediction verification
-        # ----------------------------------------------------
-
-        st.divider()
-
-        with st.expander(
-            "Prediction verification",
-            expanded=False,
-        ):
-
-            manual_blend = float(
-                artifact["lgb_weight"]
-                * prediction_result[
-                    "lgb_log_prediction"
-                ]
-                + artifact["xgb_weight"]
-                * prediction_result[
-                    "xgb_log_prediction"
-                ]
-            )
-
-            retransformed_cost = float(
-                max(
-                    0.0,
-                    np.expm1(
-                        predicted_log_cost
-                    ),
-                )
-            )
-
-            verification_df = pd.DataFrame(
-                {
-                    "Test": [
-                        "Blending formula",
-                        "Log-to-original conversion",
-                        "Outpatient input currency conversion",
-                        "Previous inpatient input currency conversion",
-                    ],
-                    "Expected result": [
-                        manual_blend,
-                        retransformed_cost,
-                        (
-                            float(outpatient_cost_selected)
-                            / exchange_rate
-                            if selected_currency_code != "CNY"
-                            else float(outpatient_cost_selected)
-                        ),
-                        (
-                            float(previous_inpatient_cost_selected)
-                            / exchange_rate
-                            if selected_currency_code != "CNY"
-                            else float(previous_inpatient_cost_selected)
-                        ),
-                    ],
-                    "Application result": [
-                        predicted_log_cost,
-                        predicted_cost_cny,
-                        outpatient_cost_cny,
-                        previous_inpatient_cost_cny,
-                    ],
-                    "Status": [
-                        (
-                            "Pass"
-                            if np.isclose(
-                                manual_blend,
-                                predicted_log_cost,
-                                rtol=1e-12,
-                                atol=1e-12,
-                            )
-                            else "Fail"
-                        ),
-                        (
-                            "Pass"
-                            if np.isclose(
-                                retransformed_cost,
-                                predicted_cost_cny,
-                                rtol=1e-12,
-                                atol=1e-12,
-                            )
-                            else "Fail"
-                        ),
-                        (
-                            "Pass"
-                            if np.isclose(
-                                (
-                                    float(outpatient_cost_selected)
-                                    / exchange_rate
-                                    if selected_currency_code != "CNY"
-                                    else float(outpatient_cost_selected)
-                                ),
-                                outpatient_cost_cny,
-                                rtol=1e-12,
-                                atol=1e-12,
-                            )
-                            else "Fail"
-                        ),
-                        (
-                            "Pass"
-                            if np.isclose(
-                                (
-                                    float(previous_inpatient_cost_selected)
-                                    / exchange_rate
-                                    if selected_currency_code != "CNY"
-                                    else float(previous_inpatient_cost_selected)
-                                ),
-                                previous_inpatient_cost_cny,
-                                rtol=1e-12,
-                                atol=1e-12,
-                            )
-                            else "Fail"
-                        ),
-                    ],
-                }
-            )
-
-            st.dataframe(
-                verification_df,
-                use_container_width=True,
-                hide_index=True,
-            )
-
-        # ----------------------------------------------------
-        # Technical details
-        # ----------------------------------------------------
-
-        with st.expander(
-            "View technical prediction details"
-        ):
-            st.write(
-                "Model path:",
-                str(MODEL_PATH),
-            )
-
-            st.write(
-                "Required original features:",
-                artifact["original_feature_names"],
-            )
-
-            st.write(
-                "Selected input/output currency:",
-                selected_currency_code,
-            )
-
-            st.write(
-                "Exchange rate used:",
-                (
-                    f"1 CNY = {exchange_rate:.6f} "
-                    f"{selected_currency_code}"
-                ),
-            )
-
-            st.write(
-                "Current outpatient cost entered by user:",
-                (
-                    f"{selected_currency_symbol}"
-                    f"{float(outpatient_cost_selected):,.2f} "
-                    f"{selected_currency_code}"
-                ),
-            )
-
-            st.write(
-                "Current outpatient cost sent to model:",
-                f"¥{outpatient_cost_cny:,.2f} CNY",
-            )
-
-            st.write(
-                "Previous inpatient cost entered by user:",
-                (
-                    f"{selected_currency_symbol}"
-                    f"{float(previous_inpatient_cost_selected):,.2f} "
-                    f"{selected_currency_code}"
-                ),
-            )
-
-            st.write(
-                "Previous inpatient cost sent to model:",
-                f"¥{previous_inpatient_cost_cny:,.2f} CNY",
-            )
-
-            st.write(
-                "LightGBM weight:",
-                artifact["lgb_weight"],
-            )
-
-            st.write(
-                "XGBoost weight:",
-                artifact["xgb_weight"],
-            )
-
-            st.write(
-                "LightGBM log prediction:",
-                prediction_result[
-                    "lgb_log_prediction"
-                ],
-            )
-
-            st.write(
-                "XGBoost log prediction:",
-                prediction_result[
-                    "xgb_log_prediction"
-                ],
-            )
-
-            st.write(
-                "Blended log prediction:",
-                predicted_log_cost,
-            )
-
-            st.write(
-                "Original-scale prediction (CNY):",
-                predicted_cost_cny,
-            )
-
-            st.write(
-                (
-                    "Converted prediction "
-                    f"({selected_currency_code}):"
-                ),
-                predicted_cost_selected,
-            )
-
-            st.write(
-                "Generated original model input:"
-            )
-
-            st.dataframe(
-                model_input,
-                use_container_width=True,
-                hide_index=True,
-            )
-
-            st.write(
-                "Generated engineered model input:"
-            )
-
-            st.dataframe(
-                prediction_result["engineered_input"],
-                use_container_width=True,
-                hide_index=True,
-            )
-
-            st.download_button(
-                "Download generated model input",
-                data=model_input.to_csv(
-                    index=False
-                ),
-                file_name=(
-                    "generated_original_model_input.csv"
-                ),
-                mime="text/csv",
-                use_container_width=True,
-            )
-
-    except Exception as error:
-        st.error(
-            "Prediction failed."
-        )
-
-        st.exception(error)
-
-
-# ============================================================
-# 20. NEARBY HEALTHCARE FACILITIES
-# ============================================================
-# IMPORTANT: The geolocation component itself is the user-triggered
-# button. The browser only asks for location permission when the user
-# clicks it. No GPS data is requested automatically on page load.
-# ============================================================
-
-st.divider()
-st.subheader("🏥 Nearby healthcare facilities")
-st.write(
-    "If you would like to seek further professional consultation, "
-    "use the button below to find nearby hospitals and clinics. "
-    "Your browser will ask for permission to share your location."
-)
-
-st.caption(
-    "Location is used only to search for nearby facilities. "
-    "Facility information is retrieved from OpenStreetMap and may "
-    "be incomplete or outdated."
-)
-
-location = streamlit_geolocation()
-
-if location:
-    location_error = location.get("error")
-    latitude = location.get("latitude")
-    longitude = location.get("longitude")
-
-    if location_error:
-        st.error(
-            "Unable to obtain your location: "
-            f"{location_error}"
-        )
-
-    elif latitude is not None and longitude is not None:
-        try:
-            latitude = float(latitude)
-            longitude = float(longitude)
-
-            if not (-90 <= latitude <= 90 and -180 <= longitude <= 180):
-                raise ValueError("The browser returned invalid coordinates.")
-
-            accuracy = location.get("accuracy")
-            if accuracy is not None:
-                try:
-                    accuracy_m = float(accuracy)
-                    st.caption(
-                        f"Location detected · Approximate accuracy: "
-                        f"{accuracy_m:.0f} m"
-                    )
-                except (TypeError, ValueError):
-                    st.caption("Location detected.")
-            else:
-                st.caption("Location detected.")
-
-            with st.spinner("Searching for nearby hospitals and clinics..."):
-                facilities = search_nearby_healthcare_facilities(
-                    latitude=latitude,
-                    longitude=longitude,
-                    radius_m=HEALTHCARE_SEARCH_RADIUS_M,
-                )
-
-            if not facilities:
-                st.info(
-                    "No hospitals or clinics were found within "
-                    f"{HEALTHCARE_SEARCH_RADIUS_M / 1000:.0f} km. "
-                    "You can try again from another location."
-                )
-            else:
-                st.success(
-                    f"Found {len(facilities)} nearby healthcare facilities."
-                )
-
-                for index, facility in enumerate(facilities, start=1):
-                    with st.container(border=True):
-                        title_col, distance_col = st.columns([4, 1])
-
-                        with title_col:
-                            st.markdown(
-                                f"**{index}. {facility['name']}**"
-                            )
-                            st.caption(facility["type"])
-
-                        with distance_col:
-                            st.metric(
-                                "Distance",
-                                f"{facility['distance_km']:.2f} km",
-                            )
-
-                        st.write(
-                            f"📍 {facility['address']}"
-                        )
-
-                        action_cols = st.columns(3)
-
-                        with action_cols[0]:
-                            st.link_button(
-                                "🗺️ Directions",
-                                build_google_maps_directions_url(
-                                    facility["latitude"],
-                                    facility["longitude"],
-                                ),
-                                use_container_width=True,
-                            )
-
-                        with action_cols[1]:
-                            if facility["phone"]:
-                                phone_url = (
-                                    "tel:"
-                                    + re.sub(
-                                        r"[^0-9+*#]",
-                                        "",
-                                        facility["phone"],
-                                    )
-                                )
-                                st.link_button(
-                                    "📞 Call",
-                                    phone_url,
-                                    use_container_width=True,
-                                )
-                            else:
-                                st.link_button(
-                                    "🔎 Maps",
-                                    build_google_maps_search_url(
-                                        facility["name"],
-                                        facility["latitude"],
-                                        facility["longitude"],
-                                    ),
-                                    use_container_width=True,
-                                )
-
-                        with action_cols[2]:
-                            if facility["website"]:
-                                website_url = facility["website"]
-                                if not website_url.startswith(("http://", "https://")):
-                                    website_url = "https://" + website_url
-                                st.link_button(
-                                    "🌐 Website",
-                                    website_url,
-                                    use_container_width=True,
-                                )
-                            else:
-                                st.link_button(
-                                    "📍 Location",
-                                    build_google_maps_search_url(
-                                        facility["name"],
-                                        facility["latitude"],
-                                        facility["longitude"],
-                                    ),
-                                    use_container_width=True,
-                                )
-
-                st.caption(
-                    "This locator helps you identify nearby facilities. "
-                    "It does not assess which facility is medically appropriate "
-                    "for your condition, and it does not provide diagnosis or treatment."
-                )
-
-        except requests.RequestException as error:
-            st.error(
-                "The healthcare-facility search service is temporarily "
-                "unavailable. Please try again later."
-            )
-            with st.expander("Technical error"):
-                st.code(str(error))
-
-        except Exception as error:
-            st.error(
-                "The nearby healthcare search could not be completed."
-            )
-            with st.expander("Technical error"):
-                st.code(str(error))
-
-
-# ============================================================
- # 21. FLOATING GEMINI CHATBOT
-# ============================================================
-#
-# Streamlit does not provide a native floating chat widget.
-# The keyed container below is fixed to the bottom-right using
-# CSS, while st.popover provides the expandable chat panel.
-# ============================================================
-
-with st.container(
-    key="floating_chat_launcher"
-):
-    with st.popover(
-        "🏥 Ask Me",
-        help=(
-            "Open the Medical Cost Prediction Assistant"
-        ),
-    ):
-        st.markdown(
-            "### Medical Cost Assistant"
-        )
-
-        st.caption(
-            "Ask about the latest prediction, SHAP factors, or try a "
-            "what-if scenario such as 'What if my weight is 45 kg?' "
-            "The assistant does not provide diagnosis or treatment advice."
-        )
-
-        if (
-            st.session_state.latest_prediction_context
-            is None
-        ):
-            st.info(
-                "Generate a prediction first for a personalised explanation."
-            )
-
-        else:
-            latest_context = (
-                st.session_state.latest_prediction_context
-            )
-
-            latest_cost_cny = float(
-                latest_context[
-                    "predicted_cost_cny"
-                ]
-            )
-
-            latest_currency_code = (
-                latest_context.get(
-                    "selected_currency_code",
-                    "CNY",
-                )
-            )
-
-            latest_currency_symbol = (
-                latest_context.get(
-                    "selected_currency_symbol",
-                    "¥",
-                )
-            )
-
-            latest_selected_cost = (
-                latest_context.get(
-                    "predicted_cost_selected_currency",
-                    latest_cost_cny,
-                )
-            )
-
-            if latest_currency_code == "CNY":
-                st.success(
-                    f"Latest prediction: "
-                    f"¥{latest_cost_cny:,.2f} CNY"
-                )
-            else:
-                st.success(
-                    "Latest prediction: "
-                    f"{latest_currency_symbol}"
-                    f"{latest_selected_cost:,.2f} "
-                    f"{latest_currency_code} "
-                    f"(¥{latest_cost_cny:,.2f} CNY)"
-                )
-
-        chat_history_container = st.container(
-            height=290,
-            border=True,
-        )
-
-        with chat_history_container:
-            for message in (
-                st.session_state.chat_messages
-            ):
-                css_class = (
-                    "mini-chat-user"
-                    if message["role"] == "user"
-                    else "mini-chat-assistant"
-                )
-
-                role_label = (
-                    "You"
-                    if message["role"] == "user"
-                    else "Assistant"
-                )
-
-                st.markdown(
-                    (
-                        f'<div class="{css_class}">'
-                        f"<strong>{role_label}</strong><br>"
-                        f"{message['content']}"
-                        "</div>"
-                    ),
-                    unsafe_allow_html=True,
-                )
-
-        with st.form(
-            "floating_chat_form",
-            clear_on_submit=True,
-        ):
-            chat_question = st.text_input(
-                "Message",
-                placeholder=(
-                    "Ask why the cost is high, or: What if my weight is 45 kg?"
-                ),
-                label_visibility="collapsed",
-            )
-
-            send_chat = st.form_submit_button(
-                "Send",
-                use_container_width=True,
-                type="primary",
-            )
-
-        clear_col, status_col = st.columns(
-            [1, 2]
-        )
-
-        with clear_col:
-            clear_chat = st.button(
-                "Clear",
-                key="clear_floating_chat",
-                use_container_width=True,
-            )
-
-        with status_col:
-            if GEMINI_API_KEY:
-                st.caption(
-                    "🟢 AI assistant ready"
-                )
-            else:
-                st.caption(
-                    "🟠 Gemini API key missing"
-                )
-
-        if clear_chat:
-            st.session_state.chat_messages = [
-                {
-                    "role": "assistant",
-                    "content": (
-                        "Chat history cleared. Generate a prediction "
-                        "and ask me to explain it."
-                    ),
-                }
-            ]
-
-            st.rerun()
-
-        if (
-            send_chat
-            and chat_question.strip()
-        ):
-            clean_question = (
-                chat_question.strip()
-            )
-
-            st.session_state.chat_messages.append(
-                {
-                    "role": "user",
-                    "content": clean_question,
-                }
-            )
-
-            if (
-                st.session_state.latest_prediction_context
-                is None
-            ):
-                assistant_response = (
-                    "Please generate a prediction first so I can "
-                    "explain the result and its model factors."
-                )
-
-            elif not GEMINI_API_KEY:
-                assistant_response = (
-                    "Gemini is unavailable because GEMINI_API_KEY "
-                    "is not configured in Streamlit Secrets."
-                )
-
-            else:
-                try:
-                    current_context = (
-                        st.session_state
-                        .latest_prediction_context
-                    )
-
-                    intent_result = detect_chat_intent(
-                        user_message=clean_question,
-                        prediction_context=current_context,
-                    )
-
-                    intent = intent_result.get(
-                        "intent",
-                        "explanation",
-                    )
-
-                    extracted_changes = intent_result.get(
-                        "changes",
-                        {},
-                    )
-
-                    if intent == "what_if":
-
-                        # Convert any hypothetical cost values supplied
-                        # in the user's preferred currency back to CNY.
-                        converted_changes = (
-                            convert_what_if_currency_changes(
-                                changes=extracted_changes,
-                                prediction_context=current_context,
-                            )
-                        )
-
-                        cleaned_changes = (
-                            validate_what_if_changes(
-                                converted_changes
-                            )
-                        )
-
-                        what_if_result = (
-                            run_what_if_prediction(
-                                artifact=artifact,
-                                prediction_context=(
-                                    current_context
-                                ),
-                                changes=cleaned_changes,
-                            )
-                        )
-
-                        assistant_response = (
-                            explain_what_if_prediction(
-                                original_context=(
-                                    current_context
-                                ),
-                                what_if_result=(
-                                    what_if_result
-                                ),
-                                user_message=(
-                                    clean_question
-                                ),
-                            )
-                        )
-
-                    else:
-                        assistant_response = (
-                            generate_gemini_explanation(
-                                prediction_context=(
-                                    current_context
-                                ),
-                                user_message=clean_question,
-                            )
-                        )
-
-                except Exception as error:
-                    assistant_response = (
-                        "The assistant could not process this request: "
-                        f"{error}"
-                    )
-
-            st.session_state.chat_messages.append(
-                {
-                    "role": "assistant",
-                    "content": assistant_response,
-                }
-            )
-
-            st.rerun()
-
-
-# ============================================================
-# 22. FOOTER
-# ============================================================
-
-st.divider()
-
-st.caption(
-    "Research prototype · Predictions are estimates derived from "
-    "historical CFPS survey data and may differ from actual medical expenses."
-)
+    cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"\s*
