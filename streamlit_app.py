@@ -1182,22 +1182,25 @@ with tab_locator:
             horizontal=True,
         )
 
- # 2. SEAMLESS LIGHT BLUE "START SEARCHING" BUTTON (ICON FULLY HIDDEN)
+# 2. SINGLE LIGHT BLUE BUTTON (SQUARE ICON COMPLETELY HIDDEN & MASKED)
     st.markdown(
         """
         <style>
-        .custom-search-container {
-            margin: 1.2rem 0 1.6rem 0;
-            display: inline-block;
-        }
-        .start-search-btn-wrapper {
+        .search-action-wrapper {
             position: relative;
+            display: inline-block;
+            margin: 1rem 0 1.5rem 0;
+            width: fit-content;
+        }
+
+        /* The visible light blue pill button */
+        .visible-search-pill {
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            gap: 0.6rem;
+            gap: 0.5rem;
             min-height: 48px;
-            padding: 0.75rem 1.8rem;
+            padding: 0.75rem 2rem;
             background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
             color: #1565c0 !important;
             border: 1px solid #90caf9;
@@ -1206,40 +1209,48 @@ with tab_locator:
             letter-spacing: 0.2px;
             border-radius: 14px;
             box-shadow: 0 6px 18px rgba(33, 150, 243, 0.18);
-            cursor: pointer;
-            overflow: hidden;
-            transition: transform 160ms ease, filter 160ms ease, box-shadow 160ms ease;
+            pointer-events: none; /* Let clicks pass directly to the invisible iframe */
+            transition: transform 160ms ease, box-shadow 160ms ease;
         }
-        .start-search-btn-wrapper:hover {
+
+        .search-action-wrapper:hover .visible-search-pill {
             transform: translateY(-2px);
             background: linear-gradient(135deg, #e8f4fd 0%, #c5e1fd 100%);
             border-color: #64b5f6;
             box-shadow: 0 8px 22px rgba(33, 150, 243, 0.28);
         }
-        /* Make the geolocation iframe and its container 100% transparent and cover the entire pill */
-        .start-search-btn-wrapper div[data-testid="stCustomComponentV1"],
-        .start-search-btn-wrapper iframe {
-            position: absolute !important;
-            top: 0 !important;
-            left: 0 !important;
-            width: 100% !important;
-            height: 100% !important;
-            margin: 0 !important;
-            padding: 0 !important;
-            border: none !important;
-            outline: none !important;
-            opacity: 0.001 !important;
+
+        /* Pull the component directly over the pill, make it completely transparent */
+        .search-action-wrapper + div[data-testid="stCustomComponentV1"],
+        div:has(> .search-action-wrapper) + div[data-testid="stCustomComponentV1"],
+        .search-action-wrapper div[data-testid="stCustomComponentV1"] {
+            margin-top: -54px !important;
+            height: 48px !important;
+            width: 210px !important;
+            opacity: 0.0001 !important;
             cursor: pointer !important;
+            position: relative !important;
             z-index: 10 !important;
         }
+
+        iframe[title="streamlit_geolocation.streamlit_geolocation"] {
+            width: 100% !important;
+            height: 48px !important;
+            cursor: pointer !important;
+            opacity: 0.0001 !important;
+            border: none !important;
+        }
         </style>
-        <div class="custom-search-container">
-            <div class="start-search-btn-wrapper">
+        <div class="search-action-wrapper">
+            <div class="visible-search-pill">
                 <span>📍 Start Searching</span>
+            </div>
+        </div>
         """,
         unsafe_allow_html=True,
     )
     user_loc = streamlit_geolocation()
+    
     st.markdown(
         """
             </div>
