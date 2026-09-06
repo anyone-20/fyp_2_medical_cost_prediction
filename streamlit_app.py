@@ -593,8 +593,12 @@ def load_gemini_client(api_key: str):
 
 
 def call_gemini_with_fallback(client: Any, prompt: str) -> str:
-    """Execute Gemini request with exponential backoff and fallback models on 503."""
-    models_to_try = ["gemini-2.5-flash", "gemini-1.5-flash"]
+    """
+    Execute Gemini request with exponential backoff and supported fallback models.
+    Uses 'gemini-2.5-flash' first, then fails over to 'gemini-2.5-flash-lite'
+    if the main model experiences 503 load spikes.
+    """
+    models_to_try = ["gemini-2.5-flash", "gemini-2.5-flash-lite"]
     last_err = None
 
     for model_name in models_to_try:
@@ -610,16 +614,17 @@ def call_gemini_with_fallback(client: Any, prompt: str) -> str:
             except Exception as e:
                 err_str = str(e)
                 last_err = e
+                # Retry on temporary load spikes
                 if "503" in err_str or "UNAVAILABLE" in err_str:
                     time.sleep(1.0 * (attempt + 1))
                     continue
-                else:
-                    raise e
+                # If 404 or any other client error occurs, immediately try the next model
+                break
+
     if last_err:
         raise last_err
     return ""
-
-
+    
 def detect_chat_intent(*, user_message: str, prediction_context: dict[str, Any]) -> dict[str, Any]:
     if not GEMINI_API_KEY:
         raise RuntimeError("GEMINI_API_KEY is not configured.")
