@@ -1197,6 +1197,32 @@ with tab_locator:
             gap: 0.6rem;
             min-height: 48px;
             padding: 0.75rem 1.8rem;
+            background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+            color: #1565c0 !important;
+            border: 1px solid #90caf9;
+            font-size: 1.05rem;
+            font-weight: 780;
+            letter-spacing: 0.2px;
+            border-radius: 14px;
+            box-shadow: 0 6px 18px rgba(33, 150, 243, 0.18);
+            cursor: pointer;
+            overflow: hidden;
+            transition: transform 160ms ease, filter 160ms ease, box-shadow 160ms ease;
+        }
+        .start-search-btn-wrapper:hover {
+            transform: translateY(-2px);
+            background: linear-gradient(135deg, #e8f4fd 0%, #c5e1fd 100%);
+            border-color: #64b5f6;
+            box-shadow: 0 8px 22px rgba(33, 150, 243, 0.28);
+        }
+        .start-search-btn-wrapper {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.6rem;
+            min-height: 48px;
+            padding: 0.75rem 1.8rem;
             background: linear-gradient(135deg, var(--app-primary), #1a4971);
             color: #ffffff !important;
             font-size: 1.05rem;
