@@ -1101,14 +1101,34 @@ def search_nearby_healthcare_facilities(
     out center tags;
     """
 
-    response = requests.post(
-        OVERPASS_API_URL,
-        data=query,
-        headers={
-            "User-Agent": "MedicalCostPredictionResearchApp/1.0"
-        },
-        timeout=35,
+   last_error = None
+
+for api_url in OVERPASS_API_URLS:
+    try:
+        response = requests.post(
+            api_url,
+            data=query,
+            headers={
+                "User-Agent": "MedicalCostPredictionResearchApp/1.0"
+            },
+            timeout=35,
+        )
+
+        response.raise_for_status()
+
+        payload = response.json()
+        break
+
+    except requests.RequestException as e:
+        last_error = e
+        continue
+
+else:
+    raise RuntimeError(
+        "All healthcare map services are temporarily unavailable. "
+        f"Last error: {last_error}"
     )
+    
     response.raise_for_status()
 
     payload = response.json()
