@@ -1163,7 +1163,26 @@ with tab_prediction:
 # TAB 2: NEARBY HEALTHCARE FACILITIES
 # ============================================================
 
-# 2. SEAMLESS "START SEARCHING" BUTTON
+with tab_locator:
+    st.markdown("### 🏥 Real-Time Healthcare Provider Locator")
+    st.write("Configure your search preferences first, then click **Start Searching** below.")
+
+    # 1. PRIORITIZE SEARCH FILTERS FIRST
+    filter_col1, filter_col2 = st.columns(2)
+    with filter_col1:
+        radius_choice = st.select_slider(
+            "Search Radius (Kilometers)",
+            options=[1, 3, 5, 10, 15],
+            value=5,
+        )
+    with filter_col2:
+        type_filter = st.radio(
+            "Show Facilities",
+            ["All", "Hospitals Only", "Clinics Only"],
+            horizontal=True,
+        )
+
+    # 2. SEAMLESS "START SEARCHING" BUTTON (ONLY ONE GEOLOCATION CALL IN THE ENTIRE SCRIPT)
     st.markdown(
         """
         <style>
@@ -1194,7 +1213,6 @@ with tab_prediction:
             filter: brightness(1.06);
             box-shadow: 0 8px 22px color-mix(in srgb, var(--app-primary) 45%, transparent);
         }
-        /* Invisible full-size overlay covering the button so clicks trigger GPS */
         .start-search-btn-wrapper div[data-testid="stCustomComponentV1"] {
             position: absolute !important;
             top: 0 !important;
@@ -1217,110 +1235,6 @@ with tab_prediction:
         <div class="custom-search-container">
             <div class="start-search-btn-wrapper">
                 <span>📍 Start Searching</span>
-        """,
-        unsafe_allow_html=True,
-    )
-    user_loc = streamlit_geolocation()
-    st.markdown(
-        """
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-
-    # 1. PRIORITIZE SEARCH FILTERS FIRST
-    filter_col1, filter_col2 = st.columns(2)
-    with filter_col1:
-        radius_choice = st.select_slider(
-            "Search Radius (Kilometers)",
-            options=[1, 3, 5, 10, 15],
-            value=5,
-        )
-    with filter_col2:
-        type_filter = st.radio(
-            "Show Facilities",
-            ["All", "Hospitals Only", "Clinics Only"],
-            horizontal=True,
-        )
-
-# 2. BEAUTIFIED ACTION CALLOUT & GEOLOCATION TRIGGER
-    st.markdown(
-        """
-        <style>
-        .locator-action-card {
-            border: 1px solid var(--app-border);
-            border-radius: 18px;
-            background: linear-gradient(135deg, var(--app-surface), var(--app-soft));
-            padding: 1.3rem 1.4rem;
-            margin: 1.2rem 0 1.5rem 0;
-            box-shadow: var(--app-shadow-soft);
-            display: flex;
-            flex-direction: column;
-            gap: 0.5rem;
-        }
-        .locator-card-title {
-            font-size: 1.15rem;
-            font-weight: 780;
-            color: var(--app-text);
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            margin: 0;
-        }
-        .locator-card-desc {
-            font-size: 0.9rem;
-            color: var(--app-muted);
-            margin: 0 0 0.8rem 0;
-            line-height: 1.45;
-        }
-        .search-trigger-box {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.85rem;
-            background: var(--app-surface);
-            border: 1px solid var(--app-border);
-            padding: 0.6rem 1rem;
-            border-radius: 14px;
-            width: fit-content;
-            box-shadow: 0 2px 8px color-mix(in srgb, var(--app-text) 5%, transparent);
-            transition: border-color 0.2s ease, transform 0.15s ease;
-        }
-        .search-trigger-box:hover {
-            border-color: var(--app-primary);
-            transform: translateY(-1px);
-        }
-        .search-trigger-text {
-            font-size: 0.98rem;
-            font-weight: 750;
-            color: var(--app-primary);
-            letter-spacing: 0.01em;
-        }
-        /* Style the iframe container of streamlit_geolocation */
-        .search-trigger-box div[data-testid="stCustomComponentV1"] {
-            display: flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-            margin: 0 !important;
-            padding: 0 !important;
-            height: 38px !important;
-        }
-        .search-trigger-box iframe {
-            width: 38px !important;
-            height: 38px !important;
-            border: none !important;
-            filter: drop-shadow(0 2px 4px rgba(43, 108, 176, 0.25));
-        }
-        </style>
-        
-        <div class="locator-action-card">
-            <h4 class="locator-card-title">📍 Ready to Find Nearby Facilities?</h4>
-            <p class="locator-card-desc">
-                Click the locator target icon below to grant browser GPS permission and begin searching according to your selected radius.
-            </p>
-            <div class="search-trigger-box">
-                <span class="search-trigger-text">Start Searching:</span>
         """,
         unsafe_allow_html=True,
     )
@@ -1394,7 +1308,7 @@ with tab_prediction:
                     else:
                         st.button("No Phone Listed", disabled=True, key=f"dis_fac_{i}", use_container_width=True)
     else:
-        st.info("Set your search preferences above, then click **Start Searching:** to find nearby facilities.")
+        st.info("Set your search preferences above, then click **Start Searching** to find nearby facilities.")
         
 # ============================================================
 # TAB 3: SYSTEM SPECIFICATIONS
