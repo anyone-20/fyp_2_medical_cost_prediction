@@ -813,7 +813,7 @@ if "had_validation_error" not in st.session_state:
 st.markdown(
     """
     <div class="app-hero">
-        <h1>🏥 Medical Cost Analytics & Healthcare Hub</h1>
+        <h1>🏥 Individual Inpatient Cost Analytics & Healthcare Hub</h1>
         <p>
             Estimate inpatient medical expenses powered by an ensemble gradient boosting pipeline,
             or locate verified hospitals and medical clinics around you.
