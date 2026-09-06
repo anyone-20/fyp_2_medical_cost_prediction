@@ -1182,87 +1182,130 @@ with tab_locator:
             horizontal=True,
         )
 
-# 2. SINGLE LIGHT BLUE BUTTON (SQUARE ICON COMPLETELY HIDDEN & MASKED)
-    st.markdown(
-        """
-        <style>
-        .search-action-wrapper {
-            position: relative;
-            display: inline-block;
-            margin: 1rem 0 1.5rem 0;
-            width: fit-content;
-        }
+    st.markdown("##### Detect Location & Start Searching")
+    st.caption("Click the button below to retrieve facilities within your specified criteria.")
 
-        /* The visible light blue pill button */
-        .visible-search-pill {
+    # 2. BEAUTIFUL NATIVE LIGHT-BLUE GEOLOCATION BUTTON (NO GREY SQUARE ICON)
+    import streamlit.components.v1 as components
+
+    # Ensure session state for coordinates exists
+    if "user_lat" not in st.session_state:
+        st.session_state.user_lat = None
+    if "user_lon" not in st.session_state:
+        st.session_state.user_lon = None
+
+    # Read coordinates passed from our embedded HTML5 geolocation trigger
+    query_params = st.query_params
+    if "lat" in query_params and "lon" in query_params:
+        try:
+            st.session_state.user_lat = float(query_params["lat"])
+            st.session_state.user_lon = float(query_params["lon"])
+        except (ValueError, TypeError):
+            pass
+
+    # Custom HTML5 Geolocation Button with identical Light-Blue Theme
+    geo_html = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+        .btn-container {
+            padding: 6px 0 10px 0;
+            display: flex;
+            align-items: center;
+        }
+        .custom-search-btn {
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            gap: 0.5rem;
+            gap: 8px;
             min-height: 48px;
-            padding: 0.75rem 2rem;
+            padding: 0 28px;
             background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
-            color: #1565c0 !important;
+            color: #1565c0;
             border: 1px solid #90caf9;
-            font-size: 1.05rem;
-            font-weight: 780;
+            font-size: 16px;
+            font-weight: 750;
             letter-spacing: 0.2px;
             border-radius: 14px;
-            box-shadow: 0 6px 18px rgba(33, 150, 243, 0.18);
-            pointer-events: none; /* Let clicks pass directly to the invisible iframe */
-            transition: transform 160ms ease, box-shadow 160ms ease;
+            box-shadow: 0 4px 14px rgba(33, 150, 243, 0.18);
+            cursor: pointer;
+            transition: all 160ms ease;
+            outline: none;
         }
-
-        .search-action-wrapper:hover .visible-search-pill {
+        .custom-search-btn:hover {
             transform: translateY(-2px);
             background: linear-gradient(135deg, #e8f4fd 0%, #c5e1fd 100%);
             border-color: #64b5f6;
-            box-shadow: 0 8px 22px rgba(33, 150, 243, 0.28);
+            box-shadow: 0 6px 18px rgba(33, 150, 243, 0.28);
         }
-
-        /* Pull the component directly over the pill, make it completely transparent */
-        .search-action-wrapper + div[data-testid="stCustomComponentV1"],
-        div:has(> .search-action-wrapper) + div[data-testid="stCustomComponentV1"],
-        .search-action-wrapper div[data-testid="stCustomComponentV1"] {
-            margin-top: -54px !important;
-            height: 48px !important;
-            width: 210px !important;
-            opacity: 0.0001 !important;
-            cursor: pointer !important;
-            position: relative !important;
-            z-index: 10 !important;
+        .custom-search-btn:active {
+            transform: translateY(0);
         }
-
-        iframe[title="streamlit_geolocation.streamlit_geolocation"] {
-            width: 100% !important;
-            height: 48px !important;
-            cursor: pointer !important;
-            opacity: 0.0001 !important;
-            border: none !important;
+        .status-msg {
+            margin-left: 14px;
+            font-size: 13.5px;
+            color: #64748b;
+            font-weight: 600;
         }
         </style>
-        <div class="search-action-wrapper">
-            <div class="visible-search-pill">
+    </head>
+    <body>
+        <div class="btn-container">
+            <button class="custom-search-btn" onclick="getLocation()">
                 <span>📍 Start Searching</span>
-            </div>
+            </button>
+            <span id="status" class="status-msg"></span>
         </div>
-        """,
-        unsafe_allow_html=True,
-    )
-    user_loc = streamlit_geolocation()
-    
-    st.markdown(
-        """
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
 
-    if user_loc and user_loc.get("latitude") and user_loc.get("longitude"):
-        u_lat = float(user_loc["latitude"])
-        u_lon = float(user_loc["longitude"])
+        <script>
+        function getLocation() {
+            const status = document.getElementById("status");
+            if (!navigator.geolocation) {
+                status.innerText = "Geolocation is not supported by your browser.";
+                return;
+            }
+            status.innerText = "Acquiring coordinates...";
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    const lat = position.coords.latitude;
+                    const lon = position.coords.longitude;
+                    status.innerText = "Coordinates found! Loading results...";
+                    
+                    // Set query parameters and trigger reload in the parent Streamlit frame
+                    const url = new URL(window.parent.location.href);
+                    url.searchParams.set("lat", lat);
+                    url.searchParams.set("lon", lon);
+                    window.parent.location.href = url.href;
+                },
+                (error) => {
+                    if (error.code === error.PERMISSION_DENIED) {
+                        status.innerText = "Location access was denied in your browser settings.";
+                    } else {
+                        status.innerText = "Location temporarily unavailable. Please retry.";
+                    }
+                },
+                { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+            );
+        }
+        </script>
+    </body>
+    </html>
+    """
 
+    components.html(geo_html, height=64)
+
+    # 3. FACILITY SEARCH & MAP PRESENTATION
+    u_lat = st.session_state.user_lat
+    u_lon = st.session_state.user_lon
+
+    if u_lat is not None and u_lon is not None:
         with st.spinner("Searching nearby facilities via OpenStreetMap..."):
             raw_facilities = search_nearby_facilities(u_lat, u_lon, radius_m=radius_choice * 1000)
 
@@ -1274,7 +1317,7 @@ with tab_locator:
             facilities = raw_facilities
 
         if not facilities:
-            st.info(f"No {type_filter.lower()} found within {radius_choice} km. Try expanding the search radius.")
+            st.info(f"No {type_filter.lower()} found within {radius_choice} km. Try expanding the search radius slider.")
         else:
             st.markdown(f"##### Showing {len(facilities)} Medical Facilities Nearby")
 
@@ -1321,6 +1364,7 @@ with tab_locator:
                         st.button("No Phone Listed", disabled=True, key=f"dis_fac_{i}", use_container_width=True)
     else:
         st.info("Set your search preferences above, then click **Start Searching** to find nearby facilities.")
+        
         
 # ============================================================
 # TAB 3: SYSTEM SPECIFICATIONS
